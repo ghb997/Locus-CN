@@ -67,7 +67,7 @@ struct LocusEasterEggView: View {
                     }
                     Spacer()
 
-                    Text("close enough")
+                    Text(L10n.tr("close enough"))
                         .font(.caption.italic())
                         .foregroundStyle(.white.opacity(0.35))
                         .padding(.bottom, 28)

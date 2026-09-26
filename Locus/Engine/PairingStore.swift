@@ -20,7 +20,7 @@ final class PairingStore: ObservableObject {
                 types.append(t)
             }
         }
-        if let custom = UTType("com.chrismack.locus.rppairing") {
+        if let custom = UTType("io.github.ghb997.locus.rppairing") {
             types.append(custom)
         }
         return types
@@ -43,13 +43,21 @@ final class PairingStore: ObservableObject {
 
     func refresh() {
         try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        hasPairingFile = FileManager.default.fileExists(atPath: pairingURL.path)
+        hasPairingFile = false
+        if let size = try? pairingURL.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+           size <= PairingValidator.maximumBytes,
+           let data = try? Data(contentsOf: pairingURL),
+           (try? PairingValidator.validate(data)) != nil {
+            hasPairingFile = true
+        }
     }
 
     func importPairing(from sourceURL: URL) throws {
         let accessing = sourceURL.startAccessingSecurityScopedResource()
         defer { if accessing { sourceURL.stopAccessingSecurityScopedResource() } }
 
+        if let size = try sourceURL.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+           size > PairingValidator.maximumBytes { throw PairingImportError.tooLarge }
         let data = try Data(contentsOf: sourceURL)
         try installPairingData(data)
     }
@@ -86,42 +94,19 @@ final class PairingStore: ObservableObject {
         hasPairingFile = false
     }
 
-    private func installPairingData(_ data: Data) throws {
-        guard looksLikePairingPlist(data) else {
-            throw PairingImportError.invalidContents
-        }
+    func installPairingData(_ data: Data) throws {
+        try PairingValidator.validate(data)
 
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        if FileManager.default.fileExists(atPath: pairingURL.path) {
-            try FileManager.default.removeItem(at: pairingURL)
-        }
-        try data.write(to: pairingURL, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: pairingURL.path)
+        // Atomic replacement preserves the last good file on validation/write failure.
+        try data.write(to: pairingURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: pairingURL.path)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var protectedURL = pairingURL
+        try? protectedURL.setResourceValues(values)
         hasPairingFile = true
         lastError = nil
     }
 
-    private func looksLikePairingPlist(_ data: Data) -> Bool {
-        if let obj = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) {
-            return obj is [AnyHashable: Any] || obj is [Any]
-        }
-        // XML plist often starts with these markers when copied as text.
-        guard let text = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
-        return text.hasPrefix("<?xml") || text.hasPrefix("bplist") || text.contains("<plist")
-    }
-}
-
-enum PairingImportError: LocalizedError {
-    case emptyClipboard
-    case invalidContents
-
-    var errorDescription: String? {
-        switch self {
-        case .emptyClipboard:
-            return "Clipboard is empty. Copy your RPPairing plist text (or the file), then try Paste again."
-        case .invalidContents:
-            return "That doesn’t look like an RPPairing plist. Copy the full pairing file contents and try again."
-        }
-    }
 }

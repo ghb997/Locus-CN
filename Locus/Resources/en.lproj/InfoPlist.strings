@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "Locus";
+"NSLocationWhenInUseUsageDescription" = "Locus reads the system location to center the map. During simulation this may be a simulated or cached location.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Locus uses background location updates to help maintain an active developer location session.";
+"NSLocalNetworkUsageDescription" = "Locus uses the local network to advertise as a pairable host (iOS 27 pairing) and to reach the developer tunnel (LocalDevVPN) for GPS override.";

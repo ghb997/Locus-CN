@@ -29,7 +29,7 @@ struct SettingsView: View {
             List {
                 Section {
                     Label {
-                        Text(pairing.hasPairingFile ? "RPPairing file installed" : "No pairing file")
+                        Text(pairing.hasPairingFile ? L10n.tr("RPPairing file installed") : L10n.tr("No pairing file"))
                     } icon: {
                         Image(systemName: pairing.hasPairingFile ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                             .foregroundStyle(pairing.hasPairingFile ? LocusTheme.statusGood : LocusTheme.statusWarn)
@@ -39,12 +39,12 @@ struct SettingsView: View {
                         Button {
                             showPairOnDevice = true
                         } label: {
-                            Label("Pair on this iPhone", systemImage: "iphone.gen3.radiowaves.left.and.right")
+                            Label(L10n.tr("Pair on this iPhone"), systemImage: "iphone.gen3.radiowaves.left.and.right")
                         }
                     }
 
-                    Button("Import RPPairing file…") { showImporter = true }
-                    Button("Paste RPPairing from clipboard") {
+                    Button(L10n.tr("Import RPPairing file…")) { showImporter = true }
+                    Button(L10n.tr("Paste RPPairing from clipboard")) {
                         do {
                             try pairing.importPairingFromClipboard()
                         } catch {
@@ -52,31 +52,34 @@ struct SettingsView: View {
                         }
                     }
                     if pairing.hasPairingFile {
-                        Button("Remove pairing file", role: .destructive) {
-                            try? pairing.removePairing()
+                        Button(L10n.tr("Remove pairing file"), role: .destructive) {
+                            do { try pairing.removePairing() }
+                            catch { session.lastError = error.localizedDescription }
                         }
                     }
                 } header: {
-                    Text("Developer pairing")
+                    Text(L10n.tr("Developer pairing"))
                 } footer: {
                     Text(supportsOnDevicePairing
-                         ? "On iOS 27, use Pair on this iPhone — no computer. Locus advertises a pairable host; confirm the 6-digit code under Settings › Privacy & Security › Developer Mode › Pair with Host. On older iOS, import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). LiveContainer: enable Fix File Picker on Locus, or use Paste / Share → LiveContainer → Locus."
-                         : "Import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). If the file picker fails (common in LiveContainer), enable Fix File Picker on the app, share the file into LiveContainer → Locus, or copy the plist and use Paste.")
+                         ? L10n.tr("On iOS 27, use Pair on this iPhone — no computer. Locus advertises a pairable host; confirm the 6-digit code under Settings › Privacy & Security › Developer Mode › Pair with Host. On older iOS, import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). LiveContainer: enable Fix File Picker on Locus, or use Paste / Share → LiveContainer → Locus.")
+                         : L10n.tr("Import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). If the file picker fails (common in LiveContainer), enable Fix File Picker on the app, share the file into LiveContainer → Locus, or copy the plist and use Paste."))
                 }
 
+                .disabled(session.canStop)
+
                 Section {
-                    TextField("Device tunnel IP", text: $tunnelIP)
+                    TextField(L10n.tr("Device tunnel IP"), text: $tunnelIP)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onSubmit {
-                            TunnelConfig.setTargetIP(tunnelIP)
+                            saveTunnelIP()
                         }
-                    LabeledContent("Status") {
-                        Text(LocalDevVPN.isConnected ? "Connected" : "Not connected")
+                    LabeledContent(L10n.tr("Status")) {
+                        Text(LocalDevVPN.isConnected ? L10n.tr("Tunnel interface detected") : L10n.tr("Tunnel interface not detected"))
                             .foregroundStyle(LocalDevVPN.isConnected ? LocusTheme.statusGood : LocusTheme.statusWarn)
                     }
-                    Button("Save tunnel IP") {
-                        TunnelConfig.setTargetIP(tunnelIP)
+                    Button(L10n.tr("Save tunnel IP")) {
+                        saveTunnelIP()
                     }
                     Button {
                         if localDevVPNInstalled {
@@ -86,26 +89,41 @@ struct SettingsView: View {
                         }
                     } label: {
                         Label(
-                            localDevVPNInstalled ? "Open LocalDevVPN" : "Get LocalDevVPN (App Store)",
+                            localDevVPNInstalled ? L10n.tr("Open LocalDevVPN") : L10n.tr("Get LocalDevVPN (App Store)"),
                             systemImage: localDevVPNInstalled ? "lock.shield.fill" : "arrow.down.app.fill"
                         )
                     }
                 } header: {
-                    Text("Tunnel")
+                    Text(L10n.tr("Tunnel"))
                 } footer: {
-                    Text("Connect LocalDevVPN before teleporting. Default tunnel IP is 10.7.0.1. Start a spoof on Wi‑Fi first; it can keep working on cellular afterward.")
+                    Text(L10n.tr("Connect LocalDevVPN before teleporting. Default tunnel IP is 10.7.0.1. Start a spoof on Wi‑Fi first; it can keep working on cellular afterward."))
                 }
 
-                Section("Privacy") {
-                    Text("Fully on-device. Favorites and recents stay in UserDefaults. No analytics, no accounts, nothing uploaded.")
+                .disabled(session.canStop)
+
+                Section(L10n.tr("Location status")) {
+                    LabeledContent(L10n.tr("Last successful command")) {
+                        Text(session.lastCommandAt?.formatted(date: .omitted, time: .standard) ?? "—")
+                    }
+                    Text(L10n.tr("A successful command does not verify other apps or a real GPS fix. After Stop, wait for a fresh system location."))
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Button(L10n.tr("Restore system location")) { session.stop(pairing: pairing) }
+                        .disabled(session.isStopping || !pairing.hasPairingFile)
+                }
+
+                Section(L10n.tr("Privacy")) {
+                    Text(L10n.tr("Favorites and pairing files stay on this device. Map search and routes use Apple Maps online services. No analytics or Locus account."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
-                Section("About") {
-                    LabeledContent("Version", value: appVersion)
-                    LabeledContent("Engine", value: "idevice DVT location simulation")
-                    Text("Locus is free and open source (MIT). Location injection uses the MIT-licensed idevice FFI.")
+                Section(L10n.tr("About")) {
+                    LabeledContent(L10n.tr("Version"), value: appVersion)
+                    LabeledContent(L10n.tr("Maintainer"), value: "ghb997")
+                    Link(L10n.tr("Project source"), destination: URL(string: "https://github.com/ghb997/Locus-CN")!)
+                    Link(L10n.tr("Original Locus project"), destination: URL(string: "https://github.com/ChrisMack32/Locus")!)
+                    LabeledContent(L10n.tr("Engine"), value: L10n.tr("idevice DVT location simulation"))
+                    Text(L10n.tr("Locus is free and open source (MIT). Location injection uses the MIT-licensed idevice FFI."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -114,7 +132,7 @@ struct SettingsView: View {
                     Button {
                         showNameEasterEgg = true
                     } label: {
-                        Text("locus, n. — a place. From the Latin for where you are.")
+                        Text(L10n.tr("locus, n. — a place. From the Latin for where you are."))
                             .font(.footnote.italic())
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -126,14 +144,21 @@ struct SettingsView: View {
                     .listRowSeparator(.hidden)
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle(L10n.tr("Settings"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        TunnelConfig.setTargetIP(tunnelIP)
-                        dismiss()
+                    Button(L10n.tr("Done")) {
+                        if session.canStop || saveTunnelIP() { dismiss() }
                     }
                 }
+            }
+            .alert("Locus", isPresented: Binding(
+                get: { session.lastError != nil },
+                set: { if !$0 { session.lastError = nil } }
+            )) {
+                Button(L10n.tr("OK"), role: .cancel) { session.lastError = nil }
+            } message: {
+                Text(session.lastError ?? "")
             }
             .sheet(isPresented: $showImporter) {
             PairingDocumentPicker(
@@ -166,6 +191,16 @@ struct SettingsView: View {
             }
         }
     }
+    @discardableResult
+    private func saveTunnelIP() -> Bool {
+        guard !session.canStop else { return true }
+        guard TunnelConfig.setTargetIP(tunnelIP) else {
+            session.lastError = LocationEngineError.invalidIP.localizedDescription
+            return false
+        }
+        tunnelIP = TunnelConfig.targetIP
+        return true
+    }
 }
 
 struct PlacesView: View {
@@ -179,9 +214,9 @@ struct PlacesView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Favorites") {
+                Section(L10n.tr("Favorites")) {
                     if session.favorites.isEmpty {
-                        Text("Star a pin from the map to save it.")
+                        Text(L10n.tr("Star a pin from the map to save it."))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(session.favorites) { place in
@@ -190,22 +225,22 @@ struct PlacesView: View {
                                 Button(role: .destructive) {
                                     session.removeFavorite(place)
                                 } label: {
-                                    Label("Delete", systemImage: "trash.fill")
+                                    Label(L10n.tr("Delete"), systemImage: "trash.fill")
                                 }
                                 Button {
                                     placeToRename = place
                                     renameText = place.name
                                 } label: {
-                                    Label("Rename", systemImage: "pencil")
+                                    Label(L10n.tr("Rename"), systemImage: "pencil")
                                 }
                                 .tint(.gray)
                             }
                     }
                 }
 
-                Section("Recents") {
+                Section(L10n.tr("Recents")) {
                     if session.recents.isEmpty {
-                        Text("Teleports show up here.")
+                        Text(L10n.tr("Teleports show up here."))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(session.recents) { place in
@@ -214,34 +249,34 @@ struct PlacesView: View {
                                 Button(role: .destructive) {
                                     session.removeRecent(place)
                                 } label: {
-                                    Label("Delete", systemImage: "trash.fill")
+                                    Label(L10n.tr("Delete"), systemImage: "trash.fill")
                                 }
                             }
                     }
                 }
             }
-            .navigationTitle("Places")
+            .navigationTitle(L10n.tr("Places"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L10n.tr("Done")) { dismiss() }
                 }
             }
-            .alert("Rename Favorite", isPresented: Binding(
+            .alert(L10n.tr("Rename Favorite"), isPresented: Binding(
                 get: { placeToRename != nil },
                 set: { if !$0 { placeToRename = nil } }
             )) {
-                TextField("Name", text: $renameText)
-                Button("Cancel", role: .cancel) {
+                TextField(L10n.tr("Name"), text: $renameText)
+                Button(L10n.tr("Cancel"), role: .cancel) {
                     placeToRename = nil
                 }
-                Button("Save") {
+                Button(L10n.tr("Save")) {
                     if let place = placeToRename {
                         session.renameFavorite(place, to: renameText)
                     }
                     placeToRename = nil
                 }
             } message: {
-                Text("Choose a name you’ll recognize later.")
+                Text(L10n.tr("Choose a name you’ll recognize later."))
             }
         }
     }

@@ -17,17 +17,17 @@ struct RoutePlannerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Road route") {
-                    Button("Use current pin / spoof as start") {
+                Section(L10n.tr("Road route")) {
+                    Button(L10n.tr("Use current pin / spoof as start")) {
                         start = session.simulated ?? session.pin
                     }
-                    Button("Use current pin as end") {
+                    Button(L10n.tr("Use current pin as end")) {
                         end = session.pin
                     }
-                    LabeledContent("Start") {
+                    LabeledContent(L10n.tr("Start")) {
                         Text(coordText(start)).font(.caption.monospaced())
                     }
-                    LabeledContent("End") {
+                    LabeledContent(L10n.tr("End")) {
                         Text(coordText(end)).font(.caption.monospaced())
                     }
                     Button {
@@ -36,39 +36,45 @@ struct RoutePlannerSheet: View {
                         if isRouting {
                             ProgressView()
                         } else {
-                            Label("Build walk/drive route on roads", systemImage: "road.lanes")
+                            Label(L10n.tr("Build walk/drive route on roads"), systemImage: "road.lanes")
                         }
                     }
                     .disabled(isRouting)
                 }
 
-                Section("Play / draw / GPX") {
+                Section(L10n.tr("Play / draw / GPX")) {
+                    HStack {
+                        Text(L10n.tr("Speed multiplier"))
+                        Slider(value: $session.speedMultiplier, in: 0.25...4, step: 0.25)
+                            .accessibilityLabel(L10n.tr("Speed multiplier"))
+                        Text(String(format: "%.2f×", session.speedMultiplier)).monospacedDigit()
+                    }
                     Button {
                         onUseDrawn()
                     } label: {
-                        Label("Use drawn path from map", systemImage: "pencil.tip")
+                        Label(L10n.tr("Use drawn path from map"), systemImage: "pencil.tip")
                     }
                     Button(action: onPlay) {
-                        Label("Follow route", systemImage: "play.fill")
+                        Label(L10n.tr("Follow route"), systemImage: "play.fill")
                     }
                     Button(action: onImportGPX) {
-                        Label("Import GPX", systemImage: "square.and.arrow.down")
+                        Label(L10n.tr("Import GPX"), systemImage: "square.and.arrow.down")
                     }
                     Button(action: onExportGPX) {
-                        Label("Export GPX", systemImage: "square.and.arrow.up")
+                        Label(L10n.tr("Export GPX"), systemImage: "square.and.arrow.up")
                     }
                 }
 
                 Section {
-                    Text("Routes follow Apple Maps roads/footpaths for the selected travel mode. Speed gets light random variation so motion looks less robotic.")
+                    Text(L10n.tr("Walking/running use walking directions. Cycling/driving use driving directions; cycling is a speed preset, not a bicycle route. The destination stays active until Stop is pressed."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("Routes")
+            .navigationTitle(L10n.tr("Routes"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L10n.tr("Done")) { dismiss() }
                 }
             }
         }

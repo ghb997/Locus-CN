@@ -41,7 +41,12 @@ struct LocusApp: App {
     private func handleIncoming(_ url: URL) {
         let ext = url.pathExtension.lowercased()
         if ["plist", "mobiledevicepairing", "mobiledevicepair"].contains(ext) {
-            try? pairing.importPairing(from: url)
+            guard !session.canStop else {
+                session.lastError = L10n.tr("Stop location simulation before changing the pairing file.")
+                return
+            }
+            do { try pairing.importPairing(from: url) }
+            catch { session.lastError = error.localizedDescription }
         } else if ext == "gpx" {
             NotificationCenter.default.post(name: .locusImportGPX, object: url)
         }

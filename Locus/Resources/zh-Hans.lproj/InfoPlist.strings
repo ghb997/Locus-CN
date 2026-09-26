@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "Locus";
+"NSLocationWhenInUseUsageDescription" = "Locus 读取系统返回的位置以定位地图。模拟期间，该位置可能是模拟位置或缓存位置。";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Locus 使用后台位置更新，帮助维持正在运行的开发者定位会话。";
+"NSLocalNetworkUsageDescription" = "Locus 使用本地网络连接 LocalDevVPN 开发者隧道，并在支持的系统上广播本机配对服务。";

@@ -36,7 +36,7 @@ struct JoystickPad: View {
                         }
                 )
         }
-        .accessibilityLabel("Movement joystick")
+        .accessibilityLabel(L10n.tr("Movement joystick"))
     }
 
     private func clamp(_ translation: CGSize, radius: CGFloat) -> CGSize {

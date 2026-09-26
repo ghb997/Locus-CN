@@ -8,3 +8,10 @@ Vendor/idevice-build/
 outputs/
 *.ipa
 Payload/
+.build/
+.swiftpm/
+__pycache__/
+*.p12
+*.mobileprovision
+*.mobiledevicepairing
+rp_pairing_file.plist

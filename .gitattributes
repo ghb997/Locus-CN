@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.swift text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.strings text eol=lf
+*.plist text eol=lf
+*.pbxproj text eol=lf
+*.a binary
+*.png binary
+Vendor/idevice/idevice.h -text

@@ -1,9 +1,10 @@
 name: Locus
 options:
-  bundleIdPrefix: com.chrismack
+  bundleIdPrefix: io.github.ghb997
+  developmentLanguage: zh-Hans
   deploymentTarget:
-    iOS: "18.0"
-  xcodeVersion: "16.0"
+    iOS: "17.0"
+  xcodeVersion: "26.0"
   createIntermediateGroups: true
   # Icon Composer packages must be treated as a single file, not exploded.
   fileTypes:
@@ -15,7 +16,7 @@ settings:
     DEVELOPMENT_TEAM: ""
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1,2"
-    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
 targets:
   Locus:
     type: application
@@ -31,10 +32,10 @@ targets:
         buildPhase: none
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.chrismack.locus
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.ghb997.locus
         PRODUCT_NAME: Locus
-        MARKETING_VERSION: "1.0.2"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "4"
         INFOPLIST_FILE: Locus/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Locus/Resources/Locus.entitlements
         CODE_SIGN_STYLE: Automatic

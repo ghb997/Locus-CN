@@ -30,7 +30,7 @@ struct RootView: View {
             get: { session.lastError != nil },
             set: { if !$0 { session.lastError = nil } }
         )) {
-            Button("OK", role: .cancel) { session.lastError = nil }
+            Button(L10n.tr("OK"), role: .cancel) { session.lastError = nil }
         } message: {
             Text(session.lastError ?? "")
         }
@@ -54,13 +54,15 @@ struct StatusBarView: View {
         case .idle:
             return tunnelConnected ? .notSpoofing : .connectVPN
         case .connecting:
-            return .status("Connecting…")
+            return .status(L10n.tr("Connecting…"))
         case .active:
-            return .status("Spoofing")
+            return .status(L10n.tr("Spoofing"))
         case .reconnecting:
-            return .status("Reconnecting…")
+            return .status(L10n.tr("Reconnecting…"))
+        case .stopping:
+            return .status(L10n.tr("Stopping…"))
         case .dropped(let reason):
-            return .status(reason.isEmpty ? "Disconnected" : "Disconnected — \(reason)")
+            return .status(reason.isEmpty ? L10n.tr("Disconnected") : L10n.format("Disconnected — %@", reason))
         }
     }
 
@@ -73,7 +75,7 @@ struct StatusBarView: View {
         case .status:
             switch session.status {
             case .active: return LocusTheme.statusGood
-            case .connecting, .reconnecting: return LocusTheme.statusWarn
+            case .connecting, .reconnecting, .stopping: return LocusTheme.statusWarn
             case .dropped: return LocusTheme.statusBad
             case .idle: return Color.primary.opacity(0.55)
             }
@@ -82,8 +84,8 @@ struct StatusBarView: View {
 
     private var title: String {
         switch display {
-        case .notSpoofing: return "Not Spoofing"
-        case .connectVPN: return "Connect LocalDevVPN"
+        case .notSpoofing: return L10n.tr("Not Spoofing")
+        case .connectVPN: return L10n.tr("Connect LocalDevVPN")
         case .status(let text): return text
         }
     }
@@ -113,7 +115,8 @@ struct StatusBarView: View {
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                do { try await Task.sleep(nanoseconds: 2_000_000_000) } catch { return }
+                guard !Task.isCancelled else { return }
                 refreshTunnel()
             }
         }
@@ -165,6 +168,30 @@ struct BottomControlsView: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            if session.routeActive {
+                VStack(spacing: 8) {
+                    ProgressView(value: session.routeProgress).tint(LocusTheme.accent)
+                    HStack {
+                        Text(L10n.format("%.0f%% · %.0f m remaining", session.routeProgress * 100, session.routeRemainingMeters))
+                            .font(.caption.monospacedDigit())
+                        Spacer()
+                        Button {
+                            session.toggleRoutePause()
+                        } label: {
+                            Label(session.routePaused ? L10n.tr("Resume route") : L10n.tr("Pause route"),
+                                  systemImage: session.routePaused ? "play.fill" : "pause.fill")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                    }
+                }
+            }
+
+            if session.status.isDropped, let coordinate = session.simulated {
+                Button(L10n.tr("Reconnect at last position")) {
+                    session.teleport(to: coordinate, pairing: pairing)
+                }
+            }
+
             if session.joystickActive {
                 JoystickPad { vector in
                     session.updateJoystick(vector: vector)
@@ -189,13 +216,16 @@ struct BottomControlsView: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(mode.title)
                 }
                 Spacer(minLength: 0)
             }
 
             HStack(spacing: 10) {
                 trayIcon("gearshape.fill") { showSettings = true }
+                    .accessibilityLabel(L10n.tr("Settings"))
                 trayIcon("star.fill") { showPlaces = true }
+                    .accessibilityLabel(L10n.tr("Favorites"))
 
                 Button {
                     if session.joystickActive {
@@ -206,7 +236,7 @@ struct BottomControlsView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "dot.circle.and.hand.point.up.left.fill")
-                        Text(session.joystickActive ? "On" : "Joy")
+                        Text(session.joystickActive ? L10n.tr("On") : L10n.tr("Joy"))
                             .lineLimit(1)
                     }
                     .font(.subheadline.weight(.semibold))
@@ -219,12 +249,13 @@ struct BottomControlsView: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .disabled(session.isStopping)
 
-                if session.isSpoofing {
+                if session.canStop {
                     Button {
                         session.stop(pairing: pairing)
                     } label: {
-                        Text("Stop")
+                        Text(session.isStopping ? L10n.tr("Stopping…") : L10n.tr("Stop"))
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(.white)
                             .frame(minWidth: 72)
@@ -234,15 +265,16 @@ struct BottomControlsView: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .disabled(session.isStopping)
                 } else {
                     Button {
                         guard let pin = session.pin else {
-                            session.lastError = "Tap the map to drop a pin first."
+                            session.lastError = L10n.tr("Tap the map to drop a pin first.")
                             return
                         }
                         session.teleport(to: pin, pairing: pairing)
                     } label: {
-                        Text("Teleport")
+                        Text(L10n.tr("Teleport"))
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(.black)
                             .frame(minWidth: 96)

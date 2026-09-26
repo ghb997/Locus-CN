@@ -23,11 +23,11 @@ struct PairOnDeviceView: View {
                 NavigationStack {
                     scrollContent
                         .background(Color.black.ignoresSafeArea())
-                        .navigationTitle("Pair on this iPhone")
+                        .navigationTitle(L10n.tr("Pair on this iPhone"))
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
-                                Button("Close") {
+                                Button(L10n.tr("Close")) {
                                     host.resetToIdle()
                                     dismiss()
                                 }
@@ -43,6 +43,7 @@ struct PairOnDeviceView: View {
                 pairing.refresh()
             }
         }
+        .onDisappear { host.resetToIdle() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, host.isBusy {
                 _ = host.pin
@@ -75,9 +76,9 @@ struct PairOnDeviceView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("No computer needed")
+            Text(L10n.tr("No computer needed"))
                 .font(.title2.weight(.bold))
-            Text("Locus advertises a pairable host. iOS connects from Developer Mode, then Locus shows a 6-digit code for you to type.")
+            Text(L10n.tr("Locus advertises a pairable host. iOS connects from Developer Mode, then Locus shows a 6-digit code for you to type."))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -85,9 +86,9 @@ struct PairOnDeviceView: View {
 
     private var embeddedIntro: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Follow these steps")
+            Text(L10n.tr("Follow these steps"))
                 .font(.headline)
-            Text("Keep Locus open. You’ll leave briefly for Settings, then come back with a code.")
+            Text(L10n.tr("Keep Locus open. You’ll leave briefly for Settings, then come back with a code."))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -95,10 +96,10 @@ struct PairOnDeviceView: View {
 
     private var steps: some View {
         VStack(alignment: .leading, spacing: 12) {
-            step(1, "Tap Start pairing and allow Local Network + Location when asked.")
-            step(2, "Allow notifications — the code can appear as a banner over Settings.")
-            step(3, "Open Settings › Privacy & Security › Developer Mode › Pair with Locus → Pair.")
-            step(4, "Enter your unlock passcode first. On the next prompt, type Locus’s 6-digit code.")
+            step(1, L10n.tr("Tap Start pairing and allow Local Network + Location when asked."))
+            step(2, L10n.tr("Allow notifications — the code can appear as a banner over Settings."))
+            step(3, L10n.tr("Open Settings › Privacy & Security › Developer Mode › Pair with Locus → Pair."))
+            step(4, L10n.tr("Enter your unlock passcode first. On the next prompt, type Locus’s 6-digit code."))
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -120,10 +121,10 @@ struct PairOnDeviceView: View {
 
     private var tipCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("If the code isn’t here yet", systemImage: "lightbulb.fill")
+            Label(L10n.tr("If the code isn’t here yet"), systemImage: "lightbulb.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(LocusTheme.accentSecondary)
-            Text("Keep the app listening while you confirm in Developer Mode. Don’t force-quit. If “Pair with Locus” vanishes, stop/start pairing and reopen Developer Mode.")
+            Text(L10n.tr("Keep the app listening while you confirm in Developer Mode. Don’t force-quit. If “Pair with Locus” vanishes, stop/start pairing and reopen Developer Mode."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -137,25 +138,25 @@ struct PairOnDeviceView: View {
         VStack(spacing: 14) {
             switch host.phase {
             case .idle:
-                Label("Ready when you are", systemImage: "antenna.radiowaves.left.and.right")
+                Label(L10n.tr("Ready when you are"), systemImage: "antenna.radiowaves.left.and.right")
                     .foregroundStyle(.secondary)
             case .advertising:
                 ProgressView()
-                Text("Waiting for Settings…")
+                Text(L10n.tr("Waiting for Settings…"))
                     .font(.headline)
-                Text("In Developer Mode tap Pair with Locus → Pair.")
+                Text(L10n.tr("In Developer Mode tap Pair with Locus → Pair."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             case .deviceConnected:
                 ProgressView()
-                Text("iPhone connected")
+                Text(L10n.tr("iPhone connected"))
                     .font(.headline)
-                Text("Generating your 6-digit code…")
+                Text(L10n.tr("Generating your 6-digit code…"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             case .awaitingPIN(let pin):
-                Text("Enter this code in Settings")
+                Text(L10n.tr("Enter this code in Settings"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(pin)
@@ -164,7 +165,7 @@ struct PairOnDeviceView: View {
                     .monospacedDigit()
                     .foregroundStyle(LocusTheme.accent)
                     .textSelection(.enabled)
-                Text("Second prompt only — after your unlock passcode.")
+                Text(L10n.tr("Second prompt only — after your unlock passcode."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -172,11 +173,11 @@ struct PairOnDeviceView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.largeTitle)
                     .foregroundStyle(LocusTheme.statusGood)
-                Text("Paired")
+                Text(L10n.tr("Paired"))
                     .font(.title3.weight(.bold))
                 Text(mode == .embedded
-                     ? "Next we’ll set up LocalDevVPN."
-                     : "RPPairing file saved. Connect LocalDevVPN, then teleport.")
+                     ? L10n.tr("Next we’ll set up LocalDevVPN.")
+                     : L10n.tr("RPPairing file saved. Connect LocalDevVPN, then teleport."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -184,7 +185,7 @@ struct PairOnDeviceView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.largeTitle)
                     .foregroundStyle(LocusTheme.statusWarn)
-                Text("Pairing failed")
+                Text(L10n.tr("Pairing failed"))
                     .font(.title3.weight(.bold))
                 Text(message)
                     .font(.footnote)
@@ -205,7 +206,7 @@ struct PairOnDeviceView: View {
                 host.acknowledgeFailure()
                 host.start(pairingStore: pairing)
             } label: {
-                Text(host.phase == .idle ? "Start pairing" : "Try again")
+                Text(host.phase == .idle ? L10n.tr("Start pairing") : L10n.tr("Try again"))
                     .font(.headline)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
@@ -222,7 +223,7 @@ struct PairOnDeviceView: View {
                     dismiss()
                 }
             } label: {
-                Text(mode == .embedded ? "Continue" : "Done")
+                Text(mode == .embedded ? L10n.tr("Continue") : L10n.tr("Done"))
                     .font(.headline)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
@@ -234,9 +235,9 @@ struct PairOnDeviceView: View {
         case .advertising, .deviceConnected, .awaitingPIN:
             Text({
                 switch host.phase {
-                case .awaitingPIN: return "Type the code above into the second Settings prompt."
-                case .deviceConnected: return "Connected — code coming next."
-                default: return "Waiting for iOS to connect… don’t force-quit Locus."
+                case .awaitingPIN: return L10n.tr("Type the code above into the second Settings prompt.")
+                case .deviceConnected: return L10n.tr("Connected — code coming next.")
+                default: return L10n.tr("Waiting for iOS to connect… don’t force-quit Locus.")
                 }
             }())
                 .font(.caption)

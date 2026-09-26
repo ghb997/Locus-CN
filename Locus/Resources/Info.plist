@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>zh-Hans</string>
 	<key>CFBundleDisplayName</key>
 	<string>Locus</string>
 	<key>CFBundleExecutable</key>
@@ -39,9 +39,9 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Locus uses your real location so you can aim the map and return home after teleporting.</string>
+	<string>Locus reads the system location to center the map. During simulation this may be a simulated or cached location.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Locus keeps a light location session alive so simulated GPS can stay active in the background.</string>
+	<string>Locus uses background location updates to help maintain an active developer location session.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Locus uses the local network to advertise as a pairable host (iOS 27 pairing) and to reach the developer tunnel (LocalDevVPN) for GPS override.</string>
 	<key>NSBonjourServices</key>
@@ -54,7 +54,6 @@
 	<array>
 		<string>audio</string>
 		<string>location</string>
-		<string>processing</string>
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
@@ -80,7 +79,7 @@
 			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>com.topografixix.gpx</string>
+				<string>com.topografix.gpx</string>
 				<string>public.xml</string>
 			</array>
 		</dict>
@@ -95,7 +94,7 @@
 			<key>UTTypeDescription</key>
 			<string>Remote Pairing File</string>
 			<key>UTTypeIdentifier</key>
-			<string>com.chrismack.locus.rppairing</string>
+			<string>io.github.ghb997.locus.rppairing</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
@@ -117,12 +116,17 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.chrismack.locus</string>
+			<string>io.github.ghb997.locus</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>locus</string>
+				<string>locus-cn</string>
 			</array>
 		</dict>
+	</array>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>zh-Hans</string>
+		<string>en</string>
 	</array>
 </dict>
 </plist>

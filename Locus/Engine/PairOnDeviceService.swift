@@ -25,7 +25,8 @@ final class PairOnDeviceService: ObservableObject {
     @Published private(set) var debugPort: UInt16?
 
     private var worker: Thread?
-    private let callbackBox = PairCallbackBox()
+    private var callbackBox = PairCallbackBox()
+    private weak var pairingStore: PairingStore?
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
     private let keepAlive = PairingKeepAlive()
     private let audioKeepAlive = SilentAudioKeepAlive()
@@ -43,7 +44,10 @@ final class PairOnDeviceService: ObservableObject {
         phase = .advertising
         pin = nil
         debugPort = nil
+        callbackBox.owner = nil
+        callbackBox = PairCallbackBox()
         callbackBox.owner = self
+        self.pairingStore = pairingStore
 
         requestNotificationPermission()
         beginKeepAlive()
@@ -108,8 +112,8 @@ final class PairOnDeviceService: ObservableObject {
     fileprivate func handleConnected() {
         phase = .deviceConnected
         Self.postPlainNotification(
-            title: "Locus connected",
-            body: "Generating pairing code…"
+            title: L10n.tr("Locus connected"),
+            body: L10n.tr("Generating pairing code…")
         )
     }
 
@@ -125,8 +129,8 @@ final class PairOnDeviceService: ObservableObject {
         phase = .succeeded
         teardown()
         Self.postPlainNotification(
-            title: "Locus paired",
-            body: "RPPairing is ready. Connect LocalDevVPN, then teleport."
+            title: L10n.tr("Locus paired"),
+            body: L10n.tr("RPPairing is ready. Connect LocalDevVPN, then teleport.")
         )
     }
 
@@ -136,7 +140,18 @@ final class PairOnDeviceService: ObservableObject {
         teardown()
     }
 
+    private func installPairingData(_ data: Data) {
+        do {
+            guard let pairingStore else { return }
+            try pairingStore.installPairingData(data)
+            handleSuccess()
+        } catch {
+            handleFailure(error.localizedDescription)
+        }
+    }
+
     private func teardown() {
+        callbackBox.owner = nil
         advertiser.stop()
         endKeepAlive()
     }
@@ -166,7 +181,7 @@ final class PairOnDeviceService: ObservableObject {
 
     private static func postPINNotification(_ pin: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Locus pairing code"
+        content.title = L10n.tr("Locus pairing code")
         content.body = pin
         content.sound = .default
         if #available(iOS 15.0, *) {
@@ -212,10 +227,10 @@ final class PairOnDeviceService: ObservableObject {
 
         if let err {
             let message: String
-            if let cMessage = err.pointee.message {
-                message = String(cString: cMessage)
+            if err.pointee.message != nil {
+                message = L10n.format("Pairing failed (error %d). Check Developer Mode and Local Network permissions.", Int32(err.pointee.code))
             } else {
-                message = "Unknown pairing error (\(err.pointee.code))"
+                message = L10n.format("Pairing failed (error %d). Check Developer Mode and Local Network permissions.", Int32(err.pointee.code))
             }
             idevice_error_free(err)
             DispatchQueue.main.async { box.owner?.handleFailure(message) }
@@ -224,35 +239,25 @@ final class PairOnDeviceService: ObservableObject {
 
         guard let outFile else {
             DispatchQueue.main.async {
-                box.owner?.handleFailure("Pairing finished but no pairing file was returned.")
+                box.owner?.handleFailure(L10n.tr("Pairing finished but no pairing file was returned."))
             }
             return
         }
 
         defer { rp_pairing_file_free(outFile) }
 
-        let parent = (outputPath as NSString).deletingLastPathComponent
-        try? FileManager.default.createDirectory(atPath: parent, withIntermediateDirectories: true)
-
-        let writeError = outputPath.withCString { path in
-            rp_pairing_file_write(outFile, path)
-        }
-        if let writeError {
-            let message: String
-            if let cMessage = writeError.pointee.message {
-                message = String(cString: cMessage)
-            } else {
-                message = "Failed to write pairing file"
-            }
-            idevice_error_free(writeError)
-            DispatchQueue.main.async {
-                box.owner?.handleFailure("Paired, but failed to save file: \(message)")
-            }
+        var bytes: UnsafeMutablePointer<UInt8>?
+        var length = 0
+        if let error = rp_pairing_file_to_bytes(outFile, &bytes, &length) {
+            idevice_error_free(error)
+            DispatchQueue.main.async { box.owner?.handleFailure(L10n.tr("Failed to write pairing file")) }
             return
         }
-
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: outputPath)
-        DispatchQueue.main.async { box.owner?.handleSuccess() }
+        guard let bytes else { return }
+        let data = Data(bytes: bytes, count: length)
+        idevice_data_free(bytes, length)
+        // A closed/superseded pairing flow has no owner and cannot overwrite a file.
+        DispatchQueue.main.async { box.owner?.installPairingData(data) }
     }
 }
 

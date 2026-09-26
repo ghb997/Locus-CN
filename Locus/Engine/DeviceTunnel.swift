@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 enum TunnelConfig {
     /// LocalDevVPN / SideStore-style loopback tunnel endpoint.
@@ -12,7 +13,12 @@ enum TunnelConfig {
         return stored
     }
 
-    static func setTargetIP(_ value: String) {
-        UserDefaults.standard.set(value, forKey: defaultsKey)
+    @discardableResult
+    static func setTargetIP(_ value: String) -> Bool {
+        let candidate = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        var address = in_addr()
+        guard candidate.withCString({ inet_pton(AF_INET, $0, &address) }) == 1 else { return false }
+        UserDefaults.standard.set(candidate, forKey: defaultsKey)
+        return true
     }
 }

@@ -22,6 +22,11 @@ struct MapHomeView: View {
     @State private var suppressNextMapTap = false
     /// Set when the pin comes from search / a named place so starring keeps the title.
     @State private var pinPlaceName: String?
+    @State private var importedGPX: GPXImport?
+    @State private var sharedGPX: SharedGPX?
+    @State private var pendingRouteAction: RouteAction?
+    private enum RouteAction { case importGPX, exportGPX }
+
 
     private var mapStyle: MapStyle {
         switch session.mapStyleIndex {
@@ -86,7 +91,7 @@ struct MapHomeView: View {
                         }
                     }
                     if let sim = session.simulated {
-                        Annotation("Spoof", coordinate: sim) {
+                        Annotation(L10n.tr("Spoof"), coordinate: sim) {
                             ZStack {
                                 Circle().fill(LocusTheme.accent.opacity(0.25)).frame(width: 44, height: 44)
                                 Circle().fill(LocusTheme.accent).frame(width: 14, height: 14)
@@ -127,26 +132,41 @@ struct MapHomeView: View {
             importGPX(url)
         }
         .fileImporter(isPresented: $showGPXImporter, allowedContentTypes: [.xml, .data], allowsMultipleSelection: false) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                importGPX(url)
+            switch result {
+            case .success(let urls):
+                if let url = urls.first { importGPX(url) }
+            case .failure(let error): session.lastError = error.localizedDescription
             }
         }
-        .sheet(isPresented: $showRouteSheet) {
+        .sheet(isPresented: $showRouteSheet, onDismiss: {
+            let action = pendingRouteAction
+            pendingRouteAction = nil
+            if action == .importGPX { showGPXImporter = true }
+            if action == .exportGPX { exportGPX() }
+        }) {
             RoutePlannerSheet(
                 start: $routeStart,
                 end: $routeEnd,
                 isRouting: $isRouting,
                 onBuild: buildRoadRoute,
                 onPlay: playRoute,
-                onImportGPX: { showGPXImporter = true },
-                onExportGPX: exportGPX,
+                onImportGPX: { pendingRouteAction = .importGPX; showRouteSheet = false },
+                onExportGPX: { pendingRouteAction = .exportGPX; showRouteSheet = false },
                 onUseDrawn: {
-                    routeCoords = RouteBuilder.sample(coordinates: drawnPath, every: 10)
+                    routeCoords = drawnPath
                     drawnPath.removeAll()
                     drawMode = false
                 }
             )
             .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $importedGPX) { document in
+            GPXSegmentPicker(segments: document.segments) { segment in
+                useSegment(segment)
+            }
+        }
+        .sheet(item: $sharedGPX) { file in
+            GPXShareSheet(url: file.url)
         }
     }
 
@@ -186,7 +206,7 @@ struct MapHomeView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Search places", text: $searchText)
+            TextField(L10n.tr("Search places"), text: $searchText)
                 .textInputAutocapitalization(.words)
                 .focused($searchFocused)
                 .submitLabel(.search)
@@ -206,10 +226,10 @@ struct MapHomeView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Clear and dismiss keyboard")
+                .accessibilityLabel(L10n.tr("Clear and dismiss keyboard"))
             }
             if searchFocused {
-                Button("Done") {
+                Button(L10n.tr("Done")) {
                     searchFocused = false
                 }
                 .font(.subheadline.weight(.semibold))
@@ -252,14 +272,17 @@ struct MapHomeView: View {
             chromeIconButton("square.3.layers.3d") {
                 session.mapStyleIndex = (session.mapStyleIndex + 1) % 3
             }
+            .accessibilityLabel(L10n.tr("Map style"))
             chromeIconButton("point.topleft.down.to.point.bottomright.curvepath") {
                 showRouteSheet = true
             }
+            .accessibilityLabel(L10n.tr("Routes"))
             chromeIconButton(drawMode ? "pencil.tip.crop.circle.badge.minus" : "pencil.tip.crop.circle") {
                 drawMode.toggle()
                 if !drawMode { drawnPath.removeAll() }
             }
             .foregroundStyle(drawMode ? LocusTheme.accentSecondary : .primary)
+            .accessibilityLabel(L10n.tr("Draw a path"))
 
             if session.pin != nil {
                 chromeIconButton("star.circle") {
@@ -268,6 +291,7 @@ struct MapHomeView: View {
                         session.addFavorite(name: name, coordinate: pin)
                     }
                 }
+                .accessibilityLabel(L10n.tr("Save favorite"))
             }
         }
         .padding(6)
@@ -289,7 +313,7 @@ struct MapHomeView: View {
         .locusGlass(.interactive, in: Circle())
         .foregroundStyle(.primary)
         .contentShape(Circle())
-        .accessibilityLabel("Current location")
+        .accessibilityLabel(L10n.tr("Current location"))
     }
 
     /// Centers on the spoofed fix while spoofing, otherwise the real GPS —
@@ -303,7 +327,7 @@ struct MapHomeView: View {
                     latitudinalMeters: meters,
                     longitudinalMeters: meters
                 ))
-            } else if let real = session.realCoordinate {
+            } else if let real = session.systemCoordinate {
                 position = .region(MKCoordinateRegion(
                     center: real,
                     latitudinalMeters: meters,
@@ -357,7 +381,7 @@ struct MapHomeView: View {
     private func buildRoadRoute() {
         guard let start = routeStart ?? session.simulated ?? session.pin,
               let end = routeEnd else {
-            session.lastError = "Set a route start and end."
+            session.lastError = L10n.tr("Set a route start and end.")
             return
         }
         isRouting = true
@@ -380,7 +404,7 @@ struct MapHomeView: View {
     private func playRoute() {
         let path = routeCoords.isEmpty ? drawnPath : routeCoords
         guard path.count >= 2 else {
-            session.lastError = "Build or draw a route first."
+            session.lastError = L10n.tr("Build or draw a route first.")
             return
         }
         showRouteSheet = false
@@ -388,41 +412,96 @@ struct MapHomeView: View {
     }
 
     private func importGPX(_ url: URL) {
-        do {
-            let coords = try GPXCodec.parse(url)
-            routeCoords = RouteBuilder.sample(coordinates: coords, every: 10)
-            if let first = coords.first {
-                session.pin = first
-                position = .region(MKCoordinateRegion(center: first, latitudinalMeters: 2000, longitudinalMeters: 2000))
+        Task {
+            do {
+                let segments = try await Task.detached(priority: .userInitiated) { try GPXCodec.parse(url) }.value
+                if segments.count == 1, let first = segments.first {
+                    useSegment(first)
+                } else {
+                    importedGPX = GPXImport(segments: segments)
+                }
+            } catch {
+                session.lastError = error.localizedDescription
             }
-        } catch {
-            session.lastError = error.localizedDescription
+        }
+    }
+
+    private func useSegment(_ segment: GPXSegment) {
+        routeCoords = segment.coordinates
+        if let first = segment.coordinates.first {
+            session.pin = first
+            position = .region(MKCoordinateRegion(center: first, latitudinalMeters: 2000, longitudinalMeters: 2000))
         }
     }
 
     private func exportGPX() {
         let path = routeCoords.isEmpty ? drawnPath : routeCoords
         guard !path.isEmpty else {
-            session.lastError = "Nothing to export."
+            session.lastError = L10n.tr("Nothing to export.")
             return
         }
-        let gpx = GPXCodec.export(path)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Locus-Route.gpx")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Locus-Route-\(UUID().uuidString).gpx")
         do {
-            try gpx.data(using: .utf8)?.write(to: url)
-            let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let root = scene.keyWindow?.rootViewController {
-                root.present(av, animated: true)
-            }
+            try Data(GPXCodec.export(path).utf8).write(to: url, options: .atomic)
+            sharedGPX = SharedGPX(url: url)
         } catch {
             session.lastError = error.localizedDescription
         }
     }
 }
 
-private extension UIWindowScene {
-    var keyWindow: UIWindow? { windows.first { $0.isKeyWindow } }
+private struct GPXImport: Identifiable {
+    let id = UUID()
+    let segments: [GPXSegment]
+}
+
+private struct SharedGPX: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct GPXShareSheet: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+private struct GPXSegmentPicker: View {
+    let segments: [GPXSegment]
+    let onPick: (GPXSegment) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(segments) { segment in
+                        Button {
+                            onPick(segment)
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L10n.format("Segment %d", segment.id + 1))
+                                Text(L10n.format("%d points · %.1f km", segment.coordinates.count,
+                                                 CoordinateMath.length(segment.coordinates) / 1000))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } footer: {
+                    Text(L10n.tr("Choose one segment. Separate tracks are never connected automatically."))
+                }
+            }
+            .navigationTitle(L10n.tr("Choose GPX segment"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.tr("Cancel")) { dismiss() }
+                }
+            }
+        }
+    }
 }
 
 @MainActor

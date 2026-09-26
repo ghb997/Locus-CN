@@ -6,8 +6,8 @@ enum LocalDevVPN {
     static let appStoreURL = URL(string: "https://apps.apple.com/us/app/localdevvpn/id6755608044")!
     static let detectURL = URL(string: "localdevvpn://")!
 
-    /// Starts the tunnel, then returns to Locus via `locus://`.
-    static let enableURL = URL(string: "localdevvpn://enable?scheme=locus")!
+    /// A distinct URL scheme allows the original and this edition to coexist.
+    static let enableURL = URL(string: "localdevvpn://enable?scheme=locus-cn")!
 
     static var isInstalled: Bool {
         UIApplication.shared.canOpenURL(detectURL)
@@ -51,11 +51,13 @@ enum LocalDevVPN {
         var ptr: UnsafeMutablePointer<ifaddrs>? = first
         while let current = ptr {
             let interface = current.pointee
-            if interface.ifa_addr.pointee.sa_family == UInt8(AF_INET) {
+            let name = String(cString: interface.ifa_name)
+            if name.hasPrefix("utun"), (interface.ifa_flags & UInt32(IFF_UP)) != 0,
+               let address = interface.ifa_addr, address.pointee.sa_family == UInt8(AF_INET) {
                 var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                 let nameLen = socklen_t(MemoryLayout<sockaddr_in>.size)
                 if getnameinfo(
-                    interface.ifa_addr,
+                    address,
                     nameLen,
                     &host,
                     socklen_t(host.count),

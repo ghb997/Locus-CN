@@ -5,6 +5,8 @@ final class BackgroundKeepAlive: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private(set) var lastKnownCoordinate: CLLocationCoordinate2D?
 
+    func resetLastLocation() { lastKnownCoordinate = nil }
+
     override init() {
         super.init()
         manager.delegate = self
@@ -24,6 +26,9 @@ final class BackgroundKeepAlive: NSObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        lastKnownCoordinate = locations.last?.coordinate
+        guard let location = locations.last,
+              location.horizontalAccuracy >= 0,
+              abs(location.timestamp.timeIntervalSinceNow) < 30 else { return }
+        lastKnownCoordinate = location.coordinate
     }
 }
