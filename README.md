@@ -47,19 +47,21 @@ Locus 使用 idevice FFI 通过开发者隧道向 Apple 定位模拟服务发送
 
 Windows 可使用 **Actions → Build and test IPA → Run workflow**，完成后下载产物并解压获取 IPA。
 
-本地编译需要 macOS、Xcode 26 或更新版，以及 XcodeGen：
+本地编译需要 macOS、Xcode 26 或更新版、XcodeGen，以及 [rustup](https://rustup.rs/)：
 
 ```sh
 brew install xcodegen
 python3 scripts/validate_project.py
 swift test
+bash scripts/build_native.sh
 xcodegen generate
 open Locus.xcodeproj
 ```
 
 需要签名安装时，在 Xcode 的 Signing & Capabilities 中选择自己的开发团队。
 `project.yml` 是工程配置来源；修改后重新执行 XcodeGen。
-核心回归测试引用 `Locus/Core` 中的生产代码；构建校验原生依赖哈希。
+核心回归测试引用 `Locus/Core` 中的生产代码。原生库从锁定的 idevice 0.1.68 源码构建，
+固定 Rust 1.98.1 并使用 Cargo.lock，校验所有原生对象的部署下限与构建产物哈希。
 完整打包与发行流程见 [.github/workflows/build.yml](.github/workflows/build.yml)。
 
 ## 许可证

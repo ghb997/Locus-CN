@@ -65,11 +65,11 @@ struct SettingsView: View {
                          : L10n.tr("Import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). If the file picker fails (common in LiveContainer), enable Fix File Picker on the app, share the file into LiveContainer → Locus, or copy the plist and use Paste."))
                 }
 
-                .disabled(session.canStop)
+                .disabled(!session.canEditConnection)
 
                 Section {
                     TextField(L10n.tr("Device tunnel IP"), text: $tunnelIP)
-                        .disabled(session.canStop)
+                        .disabled(!session.canEditConnection)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onSubmit {
@@ -82,7 +82,7 @@ struct SettingsView: View {
                     Button(L10n.tr("Save tunnel IP")) {
                         saveTunnelIP()
                     }
-                    .disabled(session.canStop)
+                    .disabled(!session.canEditConnection)
                     Button {
                         if localDevVPNInstalled {
                             LocalDevVPN.openInstalled()
@@ -148,7 +148,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.tr("Done")) {
-                        if session.canStop || saveTunnelIP() { dismiss() }
+                        if !session.canEditConnection || saveTunnelIP() { dismiss() }
                     }
                 }
             }
@@ -193,7 +193,7 @@ struct SettingsView: View {
     }
     @discardableResult
     private func saveTunnelIP() -> Bool {
-        guard !session.canStop else { return true }
+        guard session.canEditConnection else { return true }
         guard TunnelConfig.setTargetIP(tunnelIP) else {
             session.lastError = LocationEngineError.invalidIP.localizedDescription
             return false

@@ -36,6 +36,7 @@ targets:
         PRODUCT_NAME: Locus
         MARKETING_VERSION: "1.1.0"
         CURRENT_PROJECT_VERSION: "4"
+        LOCUS_SOURCE_REVISION: local-build
         INFOPLIST_FILE: Locus/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Locus/Resources/Locus.entitlements
         CODE_SIGN_STYLE: Automatic
@@ -47,11 +48,6 @@ targets:
           - "$(inherited)"
           - "$(PROJECT_DIR)/Vendor/idevice"
         OTHER_LDFLAGS:
-          - "$(inherited)"
-          - "-lidevice_ffi"
-          - "-lc++"
-          - "-lz"
-        OTHER_LDFLAGS[sdk=iphoneos*]:
           - "$(inherited)"
           - "-lidevice_ffi"
           - "-lc++"

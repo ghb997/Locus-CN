@@ -15,23 +15,13 @@ final class PairableHostAdvertiser {
     func publish(
         port: UInt16,
         serviceIdentifier: String,
-        name: String,
-        model: String,
-        authTag: String,
-        ver: String,
-        minVer: String
+        records: [String: String]
     ) {
         stop()
         rustLoopbackPort = port
 
         var txt = NWTXTRecord()
-        txt["name"] = name
-        txt["identifier"] = serviceIdentifier
-        txt["authTag"] = authTag
-        txt["model"] = model
-        txt["flags"] = "1"
-        txt["ver"] = ver
-        txt["minVer"] = minVer
+        for (key, value) in records { txt[key] = value }
 
         do {
             let parameters = NWParameters.tcp

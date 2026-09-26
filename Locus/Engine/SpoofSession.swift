@@ -108,6 +108,7 @@ final class SpoofSession: ObservableObject {
     var isSpoofing: Bool { status == .active || status == .reconnecting }
     var canStop: Bool { status != .idle }
     var isStopping: Bool { status == .stopping }
+    var canEditConnection: Bool { !isBusy && (status == .idle || status.isDropped) }
     /// CLLocationManager can report a simulated or cached fix; never call it real GPS.
     var systemCoordinate: CLLocationCoordinate2D? { locationKeeper.lastKnownCoordinate }
     var routeRemainingSeconds: Double { routeRemainingMeters / max(0.1, travelMode.baseSpeed * speedMultiplier) }

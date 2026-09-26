@@ -89,21 +89,13 @@ final class PairOnDeviceService: ObservableObject {
     fileprivate func handleListening(
         port: UInt16,
         serviceIdentifier: String,
-        name: String,
-        model: String,
-        authTag: String,
-        ver: String,
-        minVer: String
+        records: [String: String]
     ) {
         debugPort = port
         advertiser.publish(
             port: port,
             serviceIdentifier: serviceIdentifier,
-            name: name,
-            model: model,
-            authTag: authTag,
-            ver: ver,
-            minVer: minVer
+            records: records
         )
         phase = .advertising
         NSLog("[Locus] listening on %u, Bonjour id=%@", port, serviceIdentifier)
@@ -249,9 +241,7 @@ final class PairOnDeviceService: ObservableObject {
         guard located == 0 else { reportSocketFailure(box); return }
         let port = UInt16(bigEndian: address.sin_port)
         DispatchQueue.main.async {
-            box.owner?.handleListening(port: port, serviceIdentifier: service,
-                name: txt["name"] ?? "Locus", model: txt["model"] ?? "Mac17,7",
-                authTag: txt["authTag"] ?? "", ver: txt["ver"] ?? "26", minVer: txt["minVer"] ?? "17")
+            box.owner?.handleListening(port: port, serviceIdentifier: service, records: txt)
         }
 
         var socket: Int32 = -1
@@ -382,4 +372,3 @@ private func pinDisplayTrampoline(pin: UnsafePointer<CChar>?, context: UnsafeMut
     let box = Unmanaged<PairCallbackBox>.fromOpaque(context).takeUnretainedValue()
     DispatchQueue.main.async { box.owner?.handlePIN(value) }
 }
-

@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '26.3'
       - name: Install project generator
         run: brew install xcodegen
       - name: Validate sources and dependencies
@@ -30,15 +30,28 @@ jobs:
       - name: Test shared production code
         run: swift test
       - name: Cache native compilation
-        uses: actions/cache@v4
+        id: native-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             build/native-target
-          key: ios17-native-${{ runner.arch }}-${{ hashFiles('Vendor/idevice/source-lock.json', 'scripts/build_native.sh') }}
+          key: ios17-native-xcode26.3-${{ runner.arch }}-${{ hashFiles('Vendor/idevice/source-lock.json', 'scripts/build_native.sh') }}
+          restore-keys: |
+            ios17-native-xcode26.3-${{ runner.arch }}-
+            ios17-native-${{ runner.arch }}-
       - name: Rebuild native engine for iOS 17
         run: bash scripts/build_native.sh
+      - name: Save native compilation cache
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/native-target
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Build iOS 17+ device application
         shell: bash
         run: |
@@ -50,7 +63,7 @@ jobs:
           xcodebuild -project Locus.xcodeproj -scheme Locus -configuration Release \
             -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
-            DEVELOPMENT_TEAM= build > build/xcodebuild.log 2>&1 || {
+            DEVELOPMENT_TEAM= LOCUS_SOURCE_REVISION="$GITHUB_SHA" build > build/xcodebuild.log 2>&1 || {
               tail -100 build/xcodebuild.log
               exit 1
             }
@@ -64,6 +77,7 @@ jobs:
           ditto build/DerivedData/Build/Products/Release-iphoneos/Locus.app build/Payload/Locus.app
           cp LICENSE build/Payload/Locus.app/LICENSE-Locus.txt
           cp Vendor/idevice/LICENSE.txt build/Payload/Locus.app/LICENSE-idevice.txt
+          cp build/THIRD-PARTY-LICENSES.txt build/Payload/Locus.app/THIRD-PARTY-LICENSES.txt
           cd build
           ditto -c -k --keepParent Payload Locus-CN-1.1.0-unsigned.ipa
           cd ..
@@ -78,6 +92,7 @@ jobs:
             build/toolchain.txt
             build/native-minimum-os.txt
             build/native-build.json
+            build/THIRD-PARTY-LICENSES.txt
           if-no-files-found: error
       - name: Upload native engine and generated headers
         uses: actions/upload-artifact@v4
@@ -113,5 +128,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" release/* \
-            --title 'Locus 1.1.0 简体中文版' \
-            --notes-file docs/RELEASE-1.1.0.md --verify-tag
+            --title 'Locus 1.1.0 简体中文增强版（预览）' \
+            --notes-file docs/RELEASE-1.1.0.md --verify-tag --prerelease

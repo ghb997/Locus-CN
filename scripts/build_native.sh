@@ -20,8 +20,11 @@ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 (
   cd "$native/ffi"
   cargo +"$toolchain" build --locked --release --target aarch64-apple-ios --no-default-features --features ring,full
+  cargo +"$toolchain" metadata --locked --format-version 1 --filter-platform aarch64-apple-ios \
+    --no-default-features --features ring,full > "$root/build/native-metadata.json"
 )
 cp "$CARGO_TARGET_DIR/aarch64-apple-ios/release/libidevice_ffi.a" "$root/Vendor/idevice/libidevice_ffi.a"
 cp "$native/ffi/idevice.h" "$root/Vendor/idevice/idevice.h"
 cp "$native/LICENSE.txt" "$root/Vendor/idevice/LICENSE.txt"
 python3 scripts/inspect_native.py
+python3 scripts/collect_native_notices.py

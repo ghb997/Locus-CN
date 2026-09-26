@@ -41,7 +41,7 @@ struct LocusApp: App {
     private func handleIncoming(_ url: URL) {
         let ext = url.pathExtension.lowercased()
         if ["plist", "mobiledevicepairing", "mobiledevicepair"].contains(ext) {
-            guard !session.canStop else {
+            guard session.canEditConnection else {
                 session.lastError = L10n.tr("Stop location simulation before changing the pairing file.")
                 return
             }

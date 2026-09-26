@@ -132,6 +132,7 @@ struct StatusBarView: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
+                .lineLimit(2)
 
             Spacer(minLength: 8)
 
