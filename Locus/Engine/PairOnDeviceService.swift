@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import idevice
 import UIKit
 import UserNotifications
@@ -58,12 +59,11 @@ final class PairOnDeviceService: ObservableObject {
             withIntermediateDirectories: true
         )
 
-        let outputPath = pairingStore.pairingURL.path
         let box = callbackBox
 
         worker = Thread {
             autoreleasepool {
-                Self.runBlockingAccept(outputPath: outputPath, box: box)
+                Self.runBlockingAccept(box: box)
             }
         }
         worker?.name = "locus.pairable-host"
@@ -152,6 +152,7 @@ final class PairOnDeviceService: ObservableObject {
 
     private func teardown() {
         callbackBox.owner = nil
+        callbackBox.cancel()
         advertiser.stop()
         endKeepAlive()
     }
@@ -200,64 +201,119 @@ final class PairOnDeviceService: ObservableObject {
         UNUserNotificationCenter.current().add(request)
     }
 
-    private static func runBlockingAccept(outputPath: String, box: PairCallbackBox) {
-        let name = "Locus"
-        let model = "Mac17,7"
-
-        var outFile: OpaquePointer?
-        var altIRK = [UInt8](repeating: 0, count: 16)
-
-        let err: UnsafeMutablePointer<IdeviceFfiError>? = name.withCString { namePtr in
-            model.withCString { modelPtr in
-                pairable_host_accept(
-                    namePtr,
-                    modelPtr,
-                    0,
-                    pinDisplayTrampoline,
-                    Unmanaged.passUnretained(box).toOpaque(),
-                    listeningTrampoline,
-                    Unmanaged.passUnretained(box).toOpaque(),
-                    connectedTrampoline,
-                    Unmanaged.passUnretained(box).toOpaque(),
-                    &altIRK,
-                    &outFile
-                )
-            }
-        }
-
-        if let err {
-            let message: String
-            if err.pointee.message != nil {
-                message = L10n.format("Pairing failed (error %d). Check Developer Mode and Local Network permissions.", Int32(err.pointee.code))
-            } else {
-                message = L10n.format("Pairing failed (error %d). Check Developer Mode and Local Network permissions.", Int32(err.pointee.code))
-            }
-            idevice_error_free(err)
-            DispatchQueue.main.async { box.owner?.handleFailure(message) }
+    private nonisolated static func runBlockingAccept(box: PairCallbackBox) {
+        // The current idevice API lets iOS own Bonjour and the accepted socket.
+        // This replaces the upstream app's unversioned, custom callback ABI.
+        var host: OpaquePointer?
+        var serviceID: UnsafeMutablePointer<CChar>?
+        var txtBytes: UnsafeMutablePointer<UInt8>?
+        var txtLength: UInt = 0
+        var hostIRK = [UInt8](repeating: 0, count: 16)
+        let error = pairable_host_prepare("Locus", "Mac17,7", false, &host, &serviceID, &txtBytes, &txtLength, &hostIRK)
+        if let error {
+            report(error, box: box)
             return
         }
+        guard let host, let serviceID, let txtBytes else { return }
+        defer {
+            pairable_host_free(host)
+            idevice_string_free(serviceID)
+            idevice_data_free(txtBytes, txtLength)
+        }
+        let service = String(cString: serviceID)
+        let txtData = Data(bytes: txtBytes, count: Int(txtLength))
+        guard let txt = (try? PropertyListSerialization.propertyList(from: txtData, options: [], format: nil)) as? [String: String] else { return }
 
-        guard let outFile else {
-            DispatchQueue.main.async {
-                box.owner?.handleFailure(L10n.tr("Pairing finished but no pairing file was returned."))
+        let listener = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        guard listener >= 0 else { reportSocketFailure(box); return }
+        box.track(listener)
+        defer { box.closeSocket(listener) }
+        guard !box.isCancelled else { return }
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        address.sin_port = 0
+        let bound = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(listener, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
-            return
+        }
+        guard bound == 0, Darwin.listen(listener, 1) == 0 else { reportSocketFailure(box); return }
+        var addressLength = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let located = withUnsafeMutablePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.getsockname(listener, $0, &addressLength)
+            }
+        }
+        guard located == 0 else { reportSocketFailure(box); return }
+        let port = UInt16(bigEndian: address.sin_port)
+        DispatchQueue.main.async {
+            box.owner?.handleListening(port: port, serviceIdentifier: service,
+                name: txt["name"] ?? "Locus", model: txt["model"] ?? "Mac17,7",
+                authTag: txt["authTag"] ?? "", ver: txt["ver"] ?? "26", minVer: txt["minVer"] ?? "17")
         }
 
-        defer { rp_pairing_file_free(outFile) }
+        var socket: Int32 = -1
+        while !box.isCancelled {
+            var event = pollfd(fd: listener, events: Int16(POLLIN), revents: 0)
+            let ready = Darwin.poll(&event, 1, 200)
+            guard !box.isCancelled else { return }
+            if ready < 0 {
+                if errno == EINTR { continue }
+                reportSocketFailure(box)
+                return
+            }
+            if ready == 0 { continue }
+            socket = Darwin.accept(listener, nil, nil)
+            break
+        }
+        guard socket >= 0 else {
+            if !box.isCancelled { reportSocketFailure(box) }
+            return
+        }
+        box.track(socket)
+        defer { box.closeSocket(socket) }
+        guard !box.isCancelled else { return }
+        DispatchQueue.main.async { box.owner?.handleConnected() }
 
+        var file: OpaquePointer?
+        if let error = pairable_host_accept_fd(host, socket, pinDisplayTrampoline,
+                                               Unmanaged.passUnretained(box).toOpaque(), nil, &file) {
+            report(error, box: box)
+            return
+        }
+        guard let file else { return }
+        defer { rp_pairing_file_free(file) }
         var bytes: UnsafeMutablePointer<UInt8>?
-        var length = 0
-        if let error = rp_pairing_file_to_bytes(outFile, &bytes, &length) {
-            idevice_error_free(error)
-            DispatchQueue.main.async { box.owner?.handleFailure(L10n.tr("Failed to write pairing file")) }
+        var length: UInt = 0
+        if let error = rp_pairing_file_to_bytes(file, &bytes, &length) {
+            report(error, box: box)
             return
         }
         guard let bytes else { return }
-        let data = Data(bytes: bytes, count: length)
-        idevice_data_free(bytes, length)
-        // A closed/superseded pairing flow has no owner and cannot overwrite a file.
-        DispatchQueue.main.async { box.owner?.installPairingData(data) }
+        defer { idevice_data_free(bytes, length) }
+        let data = Data(bytes: bytes, count: Int(length))
+        do {
+            guard var plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else { return }
+            // Persist the host identity returned by pairable_host_prepare.
+            if plist["alt_irk"] == nil { plist["alt_irk"] = Data(hostIRK) }
+            let record = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            DispatchQueue.main.async { box.owner?.installPairingData(record) }
+        } catch {
+            DispatchQueue.main.async { box.owner?.handleFailure(L10n.tr("Failed to write pairing file")) }
+        }
+    }
+
+    private nonisolated static func report(_ error: UnsafeMutablePointer<IdeviceFfiError>, box: PairCallbackBox) {
+        let message = L10n.format("Pairing failed (error %d). Check Developer Mode and Local Network permissions.", Int32(error.pointee.code))
+        idevice_error_free(error)
+        DispatchQueue.main.async { box.owner?.handleFailure(message) }
+    }
+
+    private nonisolated static func reportSocketFailure(_ box: PairCallbackBox) {
+        let message = L10n.format("Pairing failed (error %d). Check Developer Mode and Local Network permissions.", errno)
+        DispatchQueue.main.async { box.owner?.handleFailure(message) }
     }
 }
 
@@ -284,7 +340,40 @@ private final class PairingKeepAlive: NSObject, CLLocationManagerDelegate {
 }
 
 final class PairCallbackBox: @unchecked Sendable {
+    // Read and written only on the main queue by the owner / dispatched callbacks.
     weak var owner: PairOnDeviceService?
+    private let lock = NSLock()
+    private var cancelled = false
+    private var sockets: Set<Int32> = []
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+
+    func track(_ socket: Int32) {
+        lock.lock()
+        defer { lock.unlock() }
+        sockets.insert(socket)
+        if cancelled { Darwin.shutdown(socket, SHUT_RDWR) }
+    }
+
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        cancelled = true
+        // shutdown also wakes the descriptor duplicated by the native handshake.
+        // The worker owns close(), so a recycled descriptor cannot be closed here.
+        for socket in sockets { Darwin.shutdown(socket, SHUT_RDWR) }
+    }
+
+    func closeSocket(_ socket: Int32) {
+        lock.lock()
+        defer { lock.unlock() }
+        sockets.remove(socket)
+        Darwin.close(socket)
+    }
 }
 
 private func pinDisplayTrampoline(pin: UnsafePointer<CChar>?, context: UnsafeMutableRawPointer?) {
@@ -294,43 +383,3 @@ private func pinDisplayTrampoline(pin: UnsafePointer<CChar>?, context: UnsafeMut
     DispatchQueue.main.async { box.owner?.handlePIN(value) }
 }
 
-private func listeningTrampoline(
-    port: UInt16,
-    serviceIdentifier: UnsafePointer<CChar>?,
-    name: UnsafePointer<CChar>?,
-    model: UnsafePointer<CChar>?,
-    authTag: UnsafePointer<CChar>?,
-    ver: UnsafePointer<CChar>?,
-    minVer: UnsafePointer<CChar>?,
-    context: UnsafeMutableRawPointer?
-) {
-    guard let context else { return }
-    let box = Unmanaged<PairCallbackBox>.fromOpaque(context).takeUnretainedValue()
-    let values = (
-        port,
-        serviceIdentifier.map { String(cString: $0) } ?? "",
-        name.map { String(cString: $0) } ?? "Locus",
-        model.map { String(cString: $0) } ?? "Mac17,7",
-        authTag.map { String(cString: $0) } ?? "",
-        ver.map { String(cString: $0) } ?? "26",
-        minVer.map { String(cString: $0) } ?? "17"
-    )
-    // NetService must be touched on the main thread / runloop.
-    DispatchQueue.main.async {
-        box.owner?.handleListening(
-            port: values.0,
-            serviceIdentifier: values.1,
-            name: values.2,
-            model: values.3,
-            authTag: values.4,
-            ver: values.5,
-            minVer: values.6
-        )
-    }
-}
-
-private func connectedTrampoline(context: UnsafeMutableRawPointer?) {
-    guard let context else { return }
-    let box = Unmanaged<PairCallbackBox>.fromOpaque(context).takeUnretainedValue()
-    DispatchQueue.main.async { box.owner?.handleConnected() }
-}

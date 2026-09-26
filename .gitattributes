@@ -3,6 +3,7 @@
 *.py text eol=lf
 *.md text eol=lf
 *.yml text eol=lf
+*.sh text eol=lf
 *.strings text eol=lf
 *.plist text eol=lf
 *.pbxproj text eol=lf

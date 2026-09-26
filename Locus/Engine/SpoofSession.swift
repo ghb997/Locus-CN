@@ -267,7 +267,7 @@ final class SpoofSession: ObservableObject {
     }
 
     private func waitUntilRunning(_ epoch: UUID) async -> Bool {
-        while routePaused {
+        while routePaused || isBusy {
             guard generation == epoch, !Task.isCancelled else { return false }
             do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return false }
         }
@@ -346,7 +346,7 @@ final class SpoofSession: ObservableObject {
 
     private func apply(_ coordinate: CLLocationCoordinate2D, pairing: PairingStore, epoch: UUID, markRecent: Bool) async -> Bool {
         guard generation == epoch, !Task.isCancelled, !isStopping else { return false }
-        if status == .idle { status = .connecting }
+        if status == .idle || status.isDropped { status = .connecting }
         isBusy = true
         let result: Result<Void, LocationEngineError> = await withCheckedContinuation { continuation in
             LocationEngine.set(latitude: coordinate.latitude, longitude: coordinate.longitude,

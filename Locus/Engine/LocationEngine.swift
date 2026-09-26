@@ -76,7 +76,7 @@ enum LocationEngine {
         if let handle = locationSimulation { location_simulation_free(handle); locationSimulation = nil }
         if let handle = remoteServer { remote_server_free(handle); remoteServer = nil }
         if let handle = handshake { rsd_handshake_free(handle); handshake = nil }
-        if let handle = adapter { adapter_free(adapter); adapter = nil }
+        if let handle = adapter { adapter_free(handle); adapter = nil }
     }
 
     private static func connectLocked(pairingPath: String, deviceIP: String) -> LocationEngineError? {

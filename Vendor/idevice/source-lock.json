@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/jkcoxson/idevice.git",
+  "revision": "d32c8189c51c2789496b0768039419c3705498c3",
+  "version": "0.1.68",
+  "rustToolchain": "1.98.1",
+  "target": "aarch64-apple-ios",
+  "deploymentTarget": "17.0",
+  "features": "ring,full"
+}

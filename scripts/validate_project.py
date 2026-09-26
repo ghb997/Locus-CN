@@ -34,12 +34,9 @@ assert info['CFBundleDisplayName'] == 'Locus'
 assert info['CFBundleDevelopmentRegion'] == 'zh-Hans'
 assert info['CFBundleURLTypes'][0]['CFBundleURLSchemes'] == ['locus-cn']
 assert '"17.0"' in (ROOT / 'project.yml').read_text()
-expected = {
-    'libidevice_ffi.a': '05e6f58f082ee9f866a60763debe9b016e003005d424ac227b8d459686a2b575',
-    'idevice.h': '23b7a97ed37ebd9bc53e7620b9da8a9d1b5961f05252201462b7c5bd39e0fcc0',
-}
-for filename, checksum in expected.items():
-    actual = hashlib.sha256((ROOT / 'Vendor/idevice' / filename).read_bytes()).hexdigest()
-    assert actual == checksum, f'Native dependency changed: {filename}'
+lock = json.loads((ROOT / 'Vendor/idevice/source-lock.json').read_text())
+assert lock['revision'] == 'd32c8189c51c2789496b0768039419c3705498c3'
+assert lock['deploymentTarget'] == '17.0'
+assert lock['rustToolchain'] == '1.98.1'
 assert (ROOT / 'Vendor/idevice/LICENSE.txt').stat().st_size > 500
-print(f'Validated {len(zh)} Chinese translations, bundle metadata and native dependency hashes.')
+print(f'Validated {len(zh)} Chinese translations, bundle metadata and pinned native source settings.')

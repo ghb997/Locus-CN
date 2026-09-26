@@ -46,10 +46,10 @@ final class PairableHostAdvertiser {
                 txtRecord: txt
             )
 
-            listener.stateUpdateHandler = { [weak self] state in
+            listener.stateUpdateHandler = { [weak self, weak listener] state in
                 switch state {
                 case .ready:
-                    let p = listener.port?.rawValue ?? 0
+                    let p = listener?.port?.rawValue ?? 0
                     self?.publishedPort = p
                     NSLog("[Locus] NWListener ready on port %u (relay → 127.0.0.1:%u)", p, port)
                 case .failed(let error):
@@ -69,7 +69,7 @@ final class PairableHostAdvertiser {
                 self?.relay(connection)
             }
 
-            listener.start(queue: .global(qos: .userInitiated))
+            listener.start(queue: .main)
             self.listener = listener
             NSLog("[Locus] NWListener starting; will relay → 127.0.0.1:%u", port)
         } catch {
@@ -80,6 +80,8 @@ final class PairableHostAdvertiser {
     func stop() {
         activeRelay?.cancel()
         activeRelay = nil
+        listener?.stateUpdateHandler = nil
+        listener?.newConnectionHandler = nil
         listener?.cancel()
         listener = nil
     }

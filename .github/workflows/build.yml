@@ -29,6 +29,16 @@ jobs:
         run: python3 scripts/validate_project.py
       - name: Test shared production code
         run: swift test
+      - name: Cache native compilation
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/native-target
+          key: ios17-native-${{ runner.arch }}-${{ hashFiles('Vendor/idevice/source-lock.json', 'scripts/build_native.sh') }}
+      - name: Rebuild native engine for iOS 17
+        run: bash scripts/build_native.sh
       - name: Build iOS 17+ device application
         shell: bash
         run: |
@@ -67,7 +77,16 @@ jobs:
             build/ipa-report.json
             build/toolchain.txt
             build/native-minimum-os.txt
+            build/native-build.json
           if-no-files-found: error
+      - name: Upload native engine and generated headers
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-engine-ios17
+          path: |
+            Vendor/idevice/libidevice_ffi.a
+            Vendor/idevice/idevice.h
+            build/native-build.json
       - name: Upload build diagnostics
         if: always()
         uses: actions/upload-artifact@v4

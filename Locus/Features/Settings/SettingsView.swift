@@ -69,6 +69,7 @@ struct SettingsView: View {
 
                 Section {
                     TextField(L10n.tr("Device tunnel IP"), text: $tunnelIP)
+                        .disabled(session.canStop)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onSubmit {
@@ -81,6 +82,7 @@ struct SettingsView: View {
                     Button(L10n.tr("Save tunnel IP")) {
                         saveTunnelIP()
                     }
+                    .disabled(session.canStop)
                     Button {
                         if localDevVPNInstalled {
                             LocalDevVPN.openInstalled()
@@ -98,8 +100,6 @@ struct SettingsView: View {
                 } footer: {
                     Text(L10n.tr("Connect LocalDevVPN before teleporting. Default tunnel IP is 10.7.0.1. Start a spoof on Wi‑Fi first; it can keep working on cellular afterward."))
                 }
-
-                .disabled(session.canStop)
 
                 Section(L10n.tr("Location status")) {
                     LabeledContent(L10n.tr("Last successful command")) {
