@@ -79,12 +79,12 @@ jobs:
           cp Vendor/idevice/LICENSE.txt build/Payload/Locus.app/LICENSE-idevice.txt
           cp build/THIRD-PARTY-LICENSES.txt build/Payload/Locus.app/THIRD-PARTY-LICENSES.txt
           cd build
-          ditto -c -k --keepParent Payload Locus-CN-1.1.0-unsigned.ipa
+          ditto -c -k --keepParent Payload Locus-CN-1.1.1-unsigned.ipa
           cd ..
-          python3 scripts/verify_ipa.py build/Locus-CN-1.1.0-unsigned.ipa
+          python3 scripts/verify_ipa.py build/Locus-CN-1.1.1-unsigned.ipa
       - uses: actions/upload-artifact@v4
         with:
-          name: Locus-CN-1.1.0-unsigned
+          name: Locus-CN-1.1.1-unsigned
           path: |
             build/*.ipa
             build/*.sha256
@@ -121,12 +121,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: Locus-CN-1.1.0-unsigned
+          name: Locus-CN-1.1.1-unsigned
           path: release
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" release/* \
-            --title 'Locus 1.1.0 简体中文增强版（预览）' \
-            --notes-file docs/RELEASE-1.1.0.md --verify-tag --prerelease
+            --title 'Locus 1.1.1 简体中文增强版（原版 Bundle ID）' \
+            --notes-file docs/RELEASE-1.1.1.md --verify-tag --prerelease

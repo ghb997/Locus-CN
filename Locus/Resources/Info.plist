@@ -96,7 +96,7 @@
 			<key>UTTypeDescription</key>
 			<string>Remote Pairing File</string>
 			<key>UTTypeIdentifier</key>
-			<string>io.github.ghb997.locus.rppairing</string>
+			<string>com.chrismack.locus.rppairing</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
@@ -118,7 +118,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>io.github.ghb997.locus</string>
+			<string>com.chrismack.locus</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>locus-cn</string>

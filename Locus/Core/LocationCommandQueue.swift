@@ -3,7 +3,7 @@ import Foundation
 /// Invalidates queued writes synchronously. The serial barrier clears AFTER an
 /// already-running native call; cancelling a Swift task alone cannot do that.
 final class LocationCommandQueue: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "io.github.ghb997.locus.location", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "com.chrismack.locus.location", qos: .userInitiated)
     private let lock = NSLock()
     private var generation = UUID()
 

@@ -1,6 +1,6 @@
 name: Locus
 options:
-  bundleIdPrefix: io.github.ghb997
+  bundleIdPrefix: com.chrismack
   developmentLanguage: zh-Hans
   deploymentTarget:
     iOS: "17.0"
@@ -32,10 +32,10 @@ targets:
         buildPhase: none
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.ghb997.locus
+        PRODUCT_BUNDLE_IDENTIFIER: com.chrismack.locus
         PRODUCT_NAME: Locus
-        MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: "4"
+        MARKETING_VERSION: "1.1.1"
+        CURRENT_PROJECT_VERSION: "5"
         LOCUS_SOURCE_REVISION: local-build
         INFOPLIST_FILE: Locus/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Locus/Resources/Locus.entitlements

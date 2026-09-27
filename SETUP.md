@@ -2,11 +2,12 @@
 
 ## 1. 下载与签名
 
-从 [Releases](https://github.com/ghb997/Locus-CN/releases) 下载 `Locus-CN-1.1.0-unsigned.ipa`，App 名称为 **Locus**。
+从 [Releases](https://github.com/ghb997/Locus-CN/releases) 下载 `Locus-CN-1.1.1-unsigned.ipa`，App 名称为 **Locus**。
 
 这是未签名的 arm64 真机包。使用支持重签的 AltStore、SideStore、Sideloadly，或配合自己的有效证书使用 Feather / 其他签名工具安装。也可以在 macOS 上用 Xcode 选择自己的开发团队构建安装。签名有效期与功能受 Apple 和所用工具的规则限制。
 
-应用标识为 `io.github.ghb997.locus`，与原版使用独立数据。将同一份有效 RPPairing 导入本版即可，不要把配对文件提交到 GitHub。
+应用标识已恢复为原版的 `com.chrismack.locus`。重签时保留此 Bundle ID；能否覆盖原版安装并保留数据取决于签名证书与配置。
+此前 1.1.0 使用独立标识，其数据不会自动迁移到本版；如需使用原有配对记录，可重新导入同一份有效 RPPairing。不要把配对文件提交到 GitHub。
 
 ## 2. 打开开发者模式并配对
 

@@ -12,10 +12,10 @@ with zipfile.ZipFile(ipa) as archive:
     assert archive.testzip() is None, 'ZIP CRC validation failed'
     prefix = 'Payload/Locus.app/'
     info = plistlib.loads(archive.read(prefix + 'Info.plist'))
-    assert info['CFBundleIdentifier'] == 'io.github.ghb997.locus'
+    assert info['CFBundleIdentifier'] == 'com.chrismack.locus'
     assert info['CFBundleDisplayName'] == 'Locus'
     assert info['MinimumOSVersion'] == '17.0'
-    assert info['CFBundleShortVersionString'] == '1.1.0'
+    assert info['CFBundleShortVersionString'] == '1.1.1'
     for name in ['en.lproj/Localizable.strings', 'zh-Hans.lproj/Localizable.strings',
                  'zh-Hans.lproj/InfoPlist.strings', 'LICENSE-Locus.txt', 'LICENSE-idevice.txt', 'THIRD-PARTY-LICENSES.txt']:
         assert prefix + name in archive.namelist(), f'Missing resource: {name}'
