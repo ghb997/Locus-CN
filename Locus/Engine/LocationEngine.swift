@@ -7,7 +7,6 @@ enum LocationEngineError: LocalizedError {
     case invalidIP, invalidCoordinate, pairingRead, tunnelCreate, remoteServer
     case simulationCreate, locationSet, locationClear, cancelled
     case native(stage: String, code: Int32)
-
     var errorDescription: String? {
         switch self {
         case .invalidIP: return L10n.tr("Tunnel IP is invalid. Check Settings → Tunnel IP (usually 10.7.0.1).")
@@ -24,97 +23,104 @@ enum LocationEngineError: LocalizedError {
     }
 }
 
-/// Every native handle is confined to commands' serial queue. Public methods
-/// enqueue synchronously, so Stop is a barrier even while a native call blocks.
+enum ConnectionStage: String, CaseIterable, Identifiable {
+    case pairing, network, tunnel, handshake, service
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .pairing: return L10n.tr("Pairing record")
+        case .network: return L10n.tr("Local network connection")
+        case .tunnel: return L10n.tr("Tunnel and pair verification")
+        case .handshake: return L10n.tr("Developer service handshake")
+        case .service: return L10n.tr("Location simulation service")
+        }
+    }
+}
+
+/// Native ownership, including diagnostic connections, is confined to one serial queue.
 enum LocationEngine {
     private static let commands = LocationCommandQueue()
-    private static var adapter: OpaquePointer?
-    private static var handshake: OpaquePointer?
-    private static var remoteServer: OpaquePointer?
-    private static var locationSimulation: OpaquePointer?
-
+    private static var connection: NativeConnection?
     static func beginSession() -> UUID { commands.beginSession() }
+    static func discardConnection() { commands.barrier(operation: { connection = nil }, completion: { _ in }) }
 
     static func set(latitude: Double, longitude: Double, pairingPath: String, deviceIP: String, generation: UUID,
                     completion: @escaping (Result<Void, LocationEngineError>) -> Void) {
         commands.perform(generation: generation, cancelled: .failure(LocationEngineError.cancelled), operation: {
             guard CoordinateMath.isValid(.init(latitude: latitude, longitude: longitude)) else { return .failure(.invalidCoordinate) }
-            if let error = connectLocked(pairingPath: pairingPath, deviceIP: deviceIP) { return .failure(error) }
-            // Stop can invalidate a session during the blocking tunnel handshake.
+            if let error = connect(pairingPath, deviceIP) { return .failure(error) }
             guard commands.isCurrent(generation) else { return .failure(.cancelled) }
-            if let error = location_simulation_set(locationSimulation, latitude, longitude) {
-                let result = consume(error, stage: .locationSet)
-                cleanup()
-                return .failure(result)
+            if let error = location_simulation_set(connection!.simulation, latitude, longitude) {
+                let result = consume(error, .locationSet); connection = nil; return .failure(result)
             }
             return .success(())
         }, completion: completion)
     }
-
     static func clear(pairingPath: String, deviceIP: String, completion: @escaping (Result<Void, LocationEngineError>) -> Void) {
         commands.barrier(operation: {
-            // The device can still be simulating after a connection was lost.
-            if let error = connectLocked(pairingPath: pairingPath, deviceIP: deviceIP) { return .failure(error) }
-            if let error = location_simulation_clear(locationSimulation) {
-                let result = consume(error, stage: .locationClear)
-                cleanup()
-                return .failure(result)
-            }
-            cleanup()
+            if let error = connect(pairingPath, deviceIP) { return .failure(error) as Result<Void, LocationEngineError> }
+            defer { connection = nil }
+            if let error = location_simulation_clear(connection!.simulation) { return .failure(consume(error, .locationClear)) }
             return .success(())
         }, completion: completion)
     }
-
-    private static func consume(_ error: UnsafeMutablePointer<IdeviceFfiError>, stage: LocationEngineError) -> LocationEngineError {
-        let code = Int32(error.pointee.code)
-        idevice_error_free(error)
-        // Raw pairing/tunnel diagnostics can contain credentials; retain only code.
+    static func check(pairingPath: String, deviceIP: String, progress: @escaping (ConnectionStage) -> Void,
+                      completion: @escaping (Result<Void, LocationEngineError>) -> Void) {
+        commands.barrier(operation: {
+            let probe = NativeConnection()
+            // This isolated connection never calls location_simulation_set/clear.
+            if let error = probe.open(pairingPath, deviceIP, progress: progress) { return .failure(error) as Result<Void, LocationEngineError> }
+            return .success(())
+        }, completion: completion)
+    }
+    private static func connect(_ path: String, _ ip: String) -> LocationEngineError? {
+        if let current = connection, current.path == path, current.ip == ip { return nil }
+        connection = nil
+        let candidate = NativeConnection()
+        if let error = candidate.open(path, ip, progress: { _ in }) { return error }
+        connection = candidate
+        return nil
+    }
+    fileprivate static func consume(_ error: UnsafeMutablePointer<IdeviceFfiError>, _ stage: LocationEngineError) -> LocationEngineError {
+        let code = Int32(error.pointee.code); idevice_error_free(error)
         return .native(stage: stage.localizedDescription, code: code)
     }
+}
 
-    private static func cleanup() {
-        if let handle = locationSimulation { location_simulation_free(handle); locationSimulation = nil }
-        if let handle = remoteServer { remote_server_free(handle); remoteServer = nil }
-        if let handle = handshake { rsd_handshake_free(handle); handshake = nil }
-        if let handle = adapter { adapter_free(handle); adapter = nil }
+private final class NativeConnection {
+    var adapter: OpaquePointer?, handshake: OpaquePointer?, server: OpaquePointer?, simulation: OpaquePointer?
+    var path = "", ip = ""
+    deinit {
+        if let simulation { location_simulation_free(simulation) }
+        if let server { remote_server_free(server) }
+        if let handshake { rsd_handshake_free(handshake) }
+        if let adapter { adapter_free(adapter) }
     }
-
-    private static func connectLocked(pairingPath: String, deviceIP: String) -> LocationEngineError? {
-        if locationSimulation != nil { return nil }
+    func open(_ path: String, _ ip: String, progress: (ConnectionStage) -> Void) -> LocationEngineError? {
+        self.path = path; self.ip = ip
+        // Native API timeout; several stages may each consume this interval.
+        // Never free an in-flight handle to pretend that a call was cancelled.
+        idevice_set_global_timeout(15)
         var address = sockaddr_in()
-        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        address.sin_family = sa_family_t(AF_INET)
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size); address.sin_family = sa_family_t(AF_INET)
         address.sin_port = in_port_t(49152).bigEndian
-        guard deviceIP.withCString({ inet_pton(AF_INET, $0, &address.sin_addr) }) == 1 else { return .invalidIP }
-
-        var pairingHandle: OpaquePointer?
-        if let error = pairingPath.withCString({ rp_pairing_file_read($0, &pairingHandle) }) {
-            return consume(error, stage: .pairingRead)
-        }
-        guard let pairingHandle else { return .pairingRead }
-        defer { rp_pairing_file_free(pairingHandle) }
-        let tunnelError = withUnsafePointer(to: &address) { pointer in
+        guard ip.withCString({ inet_pton(AF_INET, $0, &address.sin_addr) }) == 1 else { return .invalidIP }
+        progress(.pairing)
+        var pairing: OpaquePointer?
+        if let error = path.withCString({ rp_pairing_file_read($0, &pairing) }) { return LocationEngine.consume(error, .pairingRead) }
+        guard let pairing else { return .pairingRead }
+        defer { rp_pairing_file_free(pairing) }
+        progress(.tunnel)
+        let failure = withUnsafePointer(to: &address) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                tunnel_create_rppairing($0, socklen_t(MemoryLayout<sockaddr_in>.stride), "LocusLocation", pairingHandle, nil, nil, &adapter, &handshake)
+                tunnel_create_rppairing($0, socklen_t(MemoryLayout<sockaddr_in>.stride), "LocusLocation", pairing, nil, nil, &adapter, &handshake)
             }
         }
-        if let error = tunnelError {
-            let result = consume(error, stage: .tunnelCreate)
-            cleanup()
-            return result
-        }
-        if let error = remote_server_connect_rsd(adapter, handshake, &remoteServer) {
-            let result = consume(error, stage: .remoteServer)
-            cleanup()
-            return result
-        }
-        // LocationSimulationClient borrows RemoteServer; retain it until after
-        // location_simulation_free, then release server, handshake and adapter.
-        if let error = location_simulation_new(remoteServer, &locationSimulation) {
-            let result = consume(error, stage: .simulationCreate)
-            cleanup()
-            return result
-        }
+        if let failure { return LocationEngine.consume(failure, .tunnelCreate) }
+        progress(.handshake)
+        if let failure = remote_server_connect_rsd(adapter, handshake, &server) { return LocationEngine.consume(failure, .remoteServer) }
+        progress(.service)
+        if let failure = location_simulation_new(server, &simulation) { return LocationEngine.consume(failure, .simulationCreate) }
         return nil
     }
 }

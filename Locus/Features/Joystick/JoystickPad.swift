@@ -4,10 +4,23 @@ struct JoystickPad: View {
     var onChange: (CGVector) -> Void
 
     @State private var dragOffset: CGSize = .zero
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var pulse: Task<Void, Never>?
     private let radius: CGFloat = 52
 
     var body: some View {
-        ZStack {
+        HStack {
+            VStack {
+                direction("arrow.up", label: L10n.tr("Move north"), vector: CGVector(dx: 0, dy: -1))
+                HStack {
+                    direction("arrow.left", label: L10n.tr("Move west"), vector: CGVector(dx: -1, dy: 0))
+                    direction("stop.fill", label: L10n.tr("Release joystick"), vector: .zero)
+                    direction("arrow.right", label: L10n.tr("Move east"), vector: CGVector(dx: 1, dy: 0))
+                }
+                direction("arrow.down", label: L10n.tr("Move south"), vector: CGVector(dx: 0, dy: 1))
+            }
+            Spacer()
+            ZStack {
             Circle()
                 .frame(width: radius * 2 + 28, height: radius * 2 + 28)
                 .locusGlass(.clear, in: Circle())
@@ -36,8 +49,25 @@ struct JoystickPad: View {
                         }
                 )
         }
-        .accessibilityLabel(L10n.tr("Movement joystick"))
+            .accessibilityLabel(L10n.tr("Movement joystick"))
+            .accessibilityAction(named: L10n.tr("Move north")) { nudge(CGVector(dx: 0, dy: -1)) }
+            .accessibilityAction(named: L10n.tr("Move south")) { nudge(CGVector(dx: 0, dy: 1)) }
+            .accessibilityAction(named: L10n.tr("Move east")) { nudge(CGVector(dx: 1, dy: 0)) }
+            .accessibilityAction(named: L10n.tr("Move west")) { nudge(CGVector(dx: -1, dy: 0)) }
+        }
+        .onDisappear { reset() }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { reset() } }
     }
+
+    private func direction(_ icon: String, label: String, vector: CGVector) -> some View {
+        Button { nudge(vector) } label: { Image(systemName: icon).frame(width: 44, height: 44).background(.thinMaterial, in: Circle()) }
+            .accessibilityLabel(label)
+    }
+    private func nudge(_ vector: CGVector) {
+        pulse?.cancel(); onChange(vector)
+        pulse = Task { do { try await Task.sleep(for: .seconds(1)) } catch { return }; onChange(.zero) }
+    }
+    private func reset() { pulse?.cancel(); dragOffset = .zero; onChange(.zero) }
 
     private func clamp(_ translation: CGSize, radius: CGFloat) -> CGSize {
         let length = sqrt(translation.width * translation.width + translation.height * translation.height)

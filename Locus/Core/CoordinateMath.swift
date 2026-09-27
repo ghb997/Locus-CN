@@ -2,6 +2,14 @@ import CoreLocation
 import Foundation
 
 enum CoordinateMath {
+    static func offset(_ origin: CLLocationCoordinate2D, eastMeters: Double, northMeters: Double) -> CLLocationCoordinate2D {
+        let angularDistance = hypot(eastMeters, northMeters) / 6_371_008.8
+        let bearing = atan2(eastMeters, northMeters)
+        let latitude = origin.latitude * .pi / 180, longitude = origin.longitude * .pi / 180
+        let nextLatitude = asin(sin(latitude) * cos(angularDistance) + cos(latitude) * sin(angularDistance) * cos(bearing))
+        let nextLongitude = longitude + atan2(sin(bearing) * sin(angularDistance) * cos(latitude), cos(angularDistance) - sin(latitude) * sin(nextLatitude))
+        return .init(latitude: nextLatitude * 180 / .pi, longitude: (nextLongitude * 180 / .pi + 540).truncatingRemainder(dividingBy: 360) - 180)
+    }
     static func isValid(_ coordinate: CLLocationCoordinate2D) -> Bool {
         coordinate.latitude.isFinite && coordinate.longitude.isFinite && CLLocationCoordinate2DIsValid(coordinate)
     }

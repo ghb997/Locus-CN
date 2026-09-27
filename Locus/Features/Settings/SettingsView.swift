@@ -5,6 +5,9 @@ struct SettingsView: View {
     @EnvironmentObject private var pairing: PairingStore
     @EnvironmentObject private var session: SpoofSession
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var diagnostics: ConnectionDiagnostics
+    @AppStorage("locus.appearance") private var appearance = "system"
+    @AppStorage("locus.backgroundEnabled") private var backgroundEnabled = false
 
     @State private var showImporter = false
     @State private var showPairOnDevice = false
@@ -65,11 +68,11 @@ struct SettingsView: View {
                          : L10n.tr("Import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). If the file picker fails (common in LiveContainer), enable Fix File Picker on the app, share the file into LiveContainer → Locus, or copy the plist and use Paste."))
                 }
 
-                .disabled(!session.canEditConnection)
+                .disabled(!session.canEditConnection || diagnostics.isRunning)
 
                 Section {
                     TextField(L10n.tr("Device tunnel IP"), text: $tunnelIP)
-                        .disabled(!session.canEditConnection)
+                        .disabled(!session.canEditConnection || diagnostics.isRunning)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onSubmit {
@@ -82,7 +85,7 @@ struct SettingsView: View {
                     Button(L10n.tr("Save tunnel IP")) {
                         saveTunnelIP()
                     }
-                    .disabled(!session.canEditConnection)
+                    .disabled(!session.canEditConnection || diagnostics.isRunning)
                     Button {
                         if localDevVPNInstalled {
                             LocalDevVPN.openInstalled()
@@ -109,6 +112,21 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                     Button(L10n.tr("Restore system location")) { session.stop(pairing: pairing) }
                         .disabled(session.isStopping || !pairing.hasPairingFile)
+                }
+
+                Section(L10n.tr("Connection diagnostics")) {
+                    NavigationLink(L10n.tr("Check connection")) { DiagnosticsView() }
+                        .disabled(!session.canEditConnection && !diagnostics.isRunning)
+                }
+                Section(L10n.tr("Preferences")) {
+                    Picker(L10n.tr("Appearance"), selection: $appearance) {
+                        Text(L10n.tr("System")).tag("system")
+                        Text(L10n.tr("Light")).tag("light")
+                        Text(L10n.tr("Dark")).tag("dark")
+                    }
+                    Toggle(L10n.tr("Keep active sessions running in the background"), isOn: $backgroundEnabled)
+                    Text(L10n.tr("Background operation requires location permission and may be suspended by iOS. Idle sessions do not continuously request location.")).font(.footnote)
+                    NavigationLink(L10n.tr("Library backup")) { LibraryBackupView() }
                 }
 
                 Section(L10n.tr("Privacy")) {
@@ -200,98 +218,5 @@ struct SettingsView: View {
         }
         tunnelIP = TunnelConfig.targetIP
         return true
-    }
-}
-
-struct PlacesView: View {
-    @EnvironmentObject private var session: SpoofSession
-    @EnvironmentObject private var pairing: PairingStore
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var placeToRename: SavedPlace?
-    @State private var renameText = ""
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section(L10n.tr("Favorites")) {
-                    if session.favorites.isEmpty {
-                        Text(L10n.tr("Star a pin from the map to save it."))
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(session.favorites) { place in
-                        placeButton(place)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    session.removeFavorite(place)
-                                } label: {
-                                    Label(L10n.tr("Delete"), systemImage: "trash.fill")
-                                }
-                                Button {
-                                    placeToRename = place
-                                    renameText = place.name
-                                } label: {
-                                    Label(L10n.tr("Rename"), systemImage: "pencil")
-                                }
-                                .tint(.gray)
-                            }
-                    }
-                }
-
-                Section(L10n.tr("Recents")) {
-                    if session.recents.isEmpty {
-                        Text(L10n.tr("Teleports show up here."))
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(session.recents) { place in
-                        placeButton(place)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    session.removeRecent(place)
-                                } label: {
-                                    Label(L10n.tr("Delete"), systemImage: "trash.fill")
-                                }
-                            }
-                    }
-                }
-            }
-            .navigationTitle(L10n.tr("Places"))
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.tr("Done")) { dismiss() }
-                }
-            }
-            .alert(L10n.tr("Rename Favorite"), isPresented: Binding(
-                get: { placeToRename != nil },
-                set: { if !$0 { placeToRename = nil } }
-            )) {
-                TextField(L10n.tr("Name"), text: $renameText)
-                Button(L10n.tr("Cancel"), role: .cancel) {
-                    placeToRename = nil
-                }
-                Button(L10n.tr("Save")) {
-                    if let place = placeToRename {
-                        session.renameFavorite(place, to: renameText)
-                    }
-                    placeToRename = nil
-                }
-            } message: {
-                Text(L10n.tr("Choose a name you’ll recognize later."))
-            }
-        }
-    }
-
-    private func placeButton(_ place: SavedPlace) -> some View {
-        Button {
-            session.teleport(to: place.coordinate, pairing: pairing)
-            dismiss()
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(place.name).foregroundStyle(.primary)
-                Text(String(format: "%.5f, %.5f", place.latitude, place.longitude))
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-            }
-        }
     }
 }

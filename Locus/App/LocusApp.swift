@@ -2,8 +2,12 @@ import SwiftUI
 
 @main
 struct LocusApp: App {
-    @StateObject private var session = SpoofSession()
-    @StateObject private var pairing = PairingStore()
+    @StateObject private var session = AppRuntime.shared.session
+    @StateObject private var pairing = AppRuntime.shared.pairing
+    @StateObject private var library = AppRuntime.shared.library
+    @StateObject private var diagnostics = AppRuntime.shared.diagnostics
+    @AppStorage("locus.appearance") private var appearance = "system"
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(SetupGate.defaultsKey) private var setupComplete = false
 
     /// Map when setup finished, or when already paired outside this walkthrough.
@@ -25,7 +29,10 @@ struct LocusApp: App {
             }
             .environmentObject(session)
             .environmentObject(pairing)
-            .preferredColorScheme(.dark)
+            .environmentObject(library)
+            .environmentObject(diagnostics)
+            .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
+            .onChange(of: scenePhase) { _, phase in session.sceneChanged(active: phase == .active, background: phase == .background) }
             .onOpenURL { url in
                 handleIncoming(url)
             }
@@ -48,7 +55,7 @@ struct LocusApp: App {
             do { try pairing.importPairing(from: url) }
             catch { session.lastError = error.localizedDescription }
         } else if ext == "gpx" {
-            NotificationCenter.default.post(name: .locusImportGPX, object: url)
+            library.incomingGPX = url
         }
     }
 }

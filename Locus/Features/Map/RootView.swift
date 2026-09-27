@@ -2,6 +2,7 @@ import SwiftUI
 import NetworkExtension
 
 struct RootView: View {
+    @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var session: SpoofSession
     @EnvironmentObject private var pairing: PairingStore
     @State private var showSettings = false
@@ -27,12 +28,12 @@ struct RootView: View {
             PlacesView()
         }
         .alert("Locus", isPresented: Binding(
-            get: { session.lastError != nil },
-            set: { if !$0 { session.lastError = nil } }
+            get: { session.lastError != nil || library.lastError != nil },
+            set: { if !$0 { session.lastError = nil; library.lastError = nil } }
         )) {
-            Button(L10n.tr("OK"), role: .cancel) { session.lastError = nil }
+            Button(L10n.tr("OK"), role: .cancel) { session.lastError = nil; library.lastError = nil }
         } message: {
-            Text(session.lastError ?? "")
+            Text(session.lastError ?? library.lastError ?? "")
         }
     }
 }
@@ -187,19 +188,38 @@ struct BottomControlsView: View {
                 }
             }
 
-            if session.status.isDropped, let coordinate = session.simulated {
-                Button(L10n.tr("Reconnect at last position")) {
-                    session.teleport(to: coordinate, pairing: pairing)
-                }
+            if session.status.isDropped {
+                HStack {
+                    Button(L10n.tr("Retry connection")) { session.reconnect(pairing: pairing) }
+                    if session.simulated != nil { Button(L10n.tr("Hold position")) { session.holdLastPosition(pairing: pairing) } }
+                    if session.canResumeRoute { Button(L10n.tr("Continue route")) { session.resumeSavedRoute(pairing: pairing) } }
+                }.font(.caption.weight(.semibold))
+            }
+            if session.status == .reconnecting {
+                HStack {
+                    ProgressView()
+                    Text(L10n.format("Connection attempt %d / 3", session.reconnectAttempt))
+                    Button(L10n.tr("Cancel")) { session.cancelReconnect() }
+                }.font(.caption)
             }
 
             if session.joystickActive {
                 JoystickPad { vector in
                     session.updateJoystick(vector: vector)
                 }
-                .frame(width: 148, height: 148)
+                .frame(height: 148)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
+
+            HStack {
+                Text(L10n.format("Speed %.1f km/h", session.displayedSpeed * 3.6))
+                Spacer()
+                if session.routeActive { Text(L10n.format("ETA %.0f min", session.routeRemainingSeconds / 60)) }
+                else {
+                    Slider(value: $session.speedMultiplier, in: 0.25...4, step: 0.25)
+                        .frame(maxWidth: 120).accessibilityLabel(L10n.tr("Speed multiplier"))
+                }
+            }.font(.caption.monospacedDigit())
 
             HStack(spacing: 8) {
                 ForEach(TravelMode.allCases) { mode in
